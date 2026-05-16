@@ -1,0 +1,12 @@
+# Corpus / data
+DEV/
+
+# Build artifacts
+inverted_index.json
+indexer_run.log
+
+# OS / IDE
+.DS_Store
+.idea/
+__pycache__/
+*.pyc
