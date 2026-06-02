@@ -3,9 +3,8 @@ import math
 import re
 from collections import defaultdict
 from urllib.parse import urlparse
-from nltk.stem import PorterStemmer
+from indexer import tokenize
 
-stemmer = PorterStemmer()
 
 INDEX_FILE = "inverted_index.jsonl"
 OFFSETS_FILE = "index_offsets.json"
@@ -72,22 +71,6 @@ def url_quality_prior(url):
         prior *= 1.08
 
     return prior
-
-
-def tokenize(text):
-    tokens = []
-    buffer = []
-    for ch in text:
-        if ch.isascii() and ch.isalnum():
-            buffer.append(ch.lower())
-        else:
-            if buffer:
-                tokens.append("".join(buffer))
-                buffer = []
-    if buffer:
-        tokens.append("".join(buffer))
-    return [stemmer.stem(t) for t in tokens]
-
 
 def load_json(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:

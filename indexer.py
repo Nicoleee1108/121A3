@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from collections import defaultdict
 from nltk.stem import PorterStemmer
 
+#Porter Stemming initializing the instance
 stemmer = PorterStemmer()
 
 IMPORTANT_TAGS = ['title', 'h1', 'h2', 'h3', 'b', 'strong']
@@ -33,6 +34,7 @@ def tokenize(text):
                 buffer = []
     if buffer:
         tokens.append("".join(buffer))
+    #Porter Stemming
     return [stemmer.stem(t) for t in tokens]
 
 
