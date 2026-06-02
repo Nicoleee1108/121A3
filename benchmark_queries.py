@@ -1,10 +1,22 @@
 """
-Run 20 evaluation queries against the on-disk index and record
-top-5 URLs + response time for each. Output goes to
-benchmark_results.json (machine-readable) and stdout (human-readable).
+M3 evaluation benchmark: 28 queries that exercise specific M3 improvements.
 
-Designed for the M3 evaluation step: we then label each query as
-good/poor and use that to drive improvements.
+Each query is tagged with the M3 change(s) it exercises.  The first 18
+queries (Groups A-D) performed poorly on the M2 baseline and should now
+rank well after M3 changes.  The last 10 (Group E) performed well on
+both M2 and M3 and act as regression tests.
+
+M3 changes referenced below:
+  [A]  JUNK_URL_PATTERNS regex      (score *= 0.1 for known-junk URLs)
+  [B]  IMPORTANT_BOOST lowered 2->1 (fix score ties on tiny boosted pages)
+  [C]  short-doc penalty            (score *= 0.6 for docs with length<1.5)
+  [D]  URL term-match bonus         (score *= up to 1.30 when URL contains q)
+  [E]  URL quality prior            (root/index URLs get a mild bump)
+
+For the M2 baseline behavior in the comments we assume the version of
+search.py *before* any M3 change: plain lnc.ltc cosine, no junk filter,
+no short-doc penalty, no URL signals.  Boost is irrelevant on the very
+first M2 (no imp_tf field) and exists as 2x on M2-end.
 """
 import json
 import time
@@ -22,39 +34,48 @@ from search import (
 
 
 QUERIES = [
-    # --- Category A: simple, should rank well (baseline) ---
-    ("A1", "cristina lopes"),
-    ("A2", "informatics"),
-    ("A3", "master of software engineering"),
-    ("A4", "irvine"),
-    ("A5", "phd program"),
+    # === Group A: poor on M2 because of junk URL pages =====================
+    # M3 fix: [A] JUNK_URL_PATTERNS
+    ("A1", "machine learning"),       # M2: cbcl detail.php?media=...jpg (image)
+    ("A2", "informatics"),            # M2: informatics.uci.edu/xmlrpc.php?rsd
+    ("A3", "mondego"),                # M2: mondego/?C=N;O=A (Apache sort)
+    ("A4", "ACM"),                    # M2: ~peymano/.../tsld008.htm slides
+    ("A5", "computer game science"),  # M2: GameLab .../v3_slide0014.htm
 
-    # --- Category B: multi-word, longer queries ---
-    ("B1", "computer science research"),
-    ("B2", "software engineering capstone"),
-    ("B3", "graduate student admissions"),
-    ("B4", "computer game science"),
-    ("B5", "data science master"),
+    # === Group B: poor on M2 because boosted-but-tiny pages dominate =======
+    # M3 fix: [B] lower boost + [C] short-doc penalty
+    ("B1", "system"),                 # M2: 5-way tie on sld00X slides @0.5583
+    ("B2", "data"),                   # M2: slides dominate top 5
+    ("B3", "research"),               # M2: kobsa-researchframe.htm @0.852
+    ("B4", "design"),                 # M2: short slide/stub pages
 
-    # --- Category C: ambiguous / very common words (expected poor) ---
-    ("C1", "machine learning"),
-    ("C2", "ACM"),
-    ("C3", "research"),
-    ("C4", "system"),
-    ("C5", "data"),
+    # === Group C: poor on M2 because canonical "about-this" page loses =====
+    # M3 fix: [D] URL term-match bonus
+    ("C1", "cristina lopes"),         # M2: mondego beats faculty profile
+    ("C2", "eppstein"),               # M3 surfaces ~eppstein/ pages
+    ("C3", "tippers"),                # M3 amplifies tippersweb ranking
+    ("C4", "iftekhar ahmed"),         # M3 surfaces ~iftekha/ pages
+    ("C5", "kobsa"),                  # M3 should surface ~kobsa pages
 
-    # --- Category D: rare / specific terms ---
-    ("D1", "mondego"),
-    ("D2", "chakrabarti"),
-    ("D3", "tippers"),
-    ("D4", "REU"),
-    ("D5", "calit2"),
+    # === Group D: poor on M2 because deep pages outrank canonical roots ====
+    # M3 fix: [E] URL quality prior
+    ("D1", "master of software engineering"),  # M3: mswe.ics.uci.edu/ #1
+    ("D2", "student council ics"),             # M3: studentcouncil/index.html
+    ("D3", "transformative play"),             # M3: transformativeplay/ root
+    ("D4", "frost game lab"),                  # M3: frost.ics.uci.edu/ root
 
-    # --- Category E: additional expected-good queries (faculty/org/dept) ---
-    ("E1", "eppstein"),
-    ("E2", "iftekhar ahmed"),
-    ("E3", "donald bren school"),
-    ("E4", "student council ics"),
+    # === Group E: good on both M2 baseline and M3 (regression tests) =======
+    # These should not regress after the M3 changes.
+    ("E1",  "chakrabarti"),                     # ~sharad/students stable
+    ("E2",  "donald bren"),                     # distinctive multiword
+    ("E3",  "software engineering capstone"),   # mswe related, multiword
+    ("E4",  "natural language processing"),     # distinctive subject area
+    ("E5",  "computer vision"),                 # distinctive subject area
+    ("E6",  "embedded systems"),                # distinctive subject area
+    ("E7",  "graduate admissions"),             # informatics/mcs pages
+    ("E8",  "iui conference"),                  # specific conference
+    ("E9",  "data science master"),             # multi-word, mcs pages
+    ("E10", "open house ics"),                  # event page
 ]
 
 
@@ -94,13 +115,22 @@ def main():
     with open("benchmark_results.json", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
 
-    # Summary table
+    # Summary table grouped by category
     print("\n" + "=" * 90)
-    print("SUMMARY (latency / hits)")
+    print("SUMMARY (grouped by which M3 change is exercised)")
     print("=" * 90)
-    print(f"{'ID':<4} {'ms':>8}  {'hits':>5}  query")
-    for row in out:
-        print(f"{row['id']:<4} {row['elapsed_ms']:>8.1f}  {row['num_results']:>5}  {row['query']}")
+    groups = {
+        "A (JUNK_URL_PATTERNS)":         [r for r in out if r["id"].startswith("A")],
+        "B (lower boost + short-doc)":   [r for r in out if r["id"].startswith("B")],
+        "C (URL term-match bonus)":      [r for r in out if r["id"].startswith("C")],
+        "D (URL quality prior)":         [r for r in out if r["id"].startswith("D")],
+        "E (regression tests)":          [r for r in out if r["id"].startswith("E")],
+    }
+    for label, rows in groups.items():
+        print(f"\n-- {label} --")
+        print(f"  {'ID':<4} {'ms':>8}  {'hits':>5}  query")
+        for r in rows:
+            print(f"  {r['id']:<4} {r['elapsed_ms']:>8.1f}  {r['num_results']:>5}  {r['query']}")
 
     avg = sum(r["elapsed_ms"] for r in out) / len(out)
     slow = [r for r in out if r["elapsed_ms"] > 300]

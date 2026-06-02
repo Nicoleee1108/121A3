@@ -20,7 +20,8 @@ IMPORTANT_BOOST = 1
 
 # URL patterns that almost always indicate junk pages (image detail views,
 # WordPress XML-RPC endpoints, Apache directory sort links, login/edit pages,
-# numbered slide single-pages from ancient presentation tools).
+# numbered slide single-pages from ancient presentation tools, and HTML
+# frame container pages whose body is just a <frame> element).
 JUNK_URL_PATTERNS = re.compile(
     r"("
     r"xmlrpc\.php"
@@ -30,7 +31,8 @@ JUNK_URL_PATTERNS = re.compile(
     r"|[?&]action=(login|edit|history|diff|source)"
     r"|[?&]do=(login|edit|diff|media)"
     r"|/(tsld|sld|img)\d{3,}\.htm"
-    r"|/slide\d{3,}\.html?"
+    r"|[/_]slide\d{3,}\.html?"   # /slide014.htm OR v3_slide014.htm
+    r"|frame\.html?$"             # /foo/frame.htm or kobsa-researchframe.htm
     r")",
     re.IGNORECASE,
 )
