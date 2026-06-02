@@ -1,6 +1,8 @@
 import json
 import math
+import re
 from collections import defaultdict
+from urllib.parse import urlparse
 from nltk.stem import PorterStemmer
 
 stemmer = PorterStemmer()
@@ -12,8 +14,62 @@ BOOKKEEPING_FILE = "bookkeeping.json"
 INDEX_REPORT_FILE = "index_report.json"
 
 # Important-word boost: terms in <title>/<h1-3>/<b>/<strong> count this many
-# extra times when computing the document term weight.
-IMPORTANT_BOOST = 2
+# extra times. Lowered from 2 -> 1 because high boost on tiny slide pages
+# was making 10-word presentation slides outrank full content pages.
+IMPORTANT_BOOST = 1
+
+# URL patterns that almost always indicate junk pages (image detail views,
+# WordPress XML-RPC endpoints, Apache directory sort links, login/edit pages,
+# numbered slide single-pages from ancient presentation tools).
+JUNK_URL_PATTERNS = re.compile(
+    r"("
+    r"xmlrpc\.php"
+    r"|/lib/exe/"
+    r"|detail\.php\?.*media="
+    r"|[?&]C=[NMSD];O=[AD]"
+    r"|[?&]action=(login|edit|history|diff|source)"
+    r"|[?&]do=(login|edit|diff|media)"
+    r"|/(tsld|sld|img)\d{3,}\.htm"
+    r"|/slide\d{3,}\.html?"
+    r")",
+    re.IGNORECASE,
+)
+
+# Multiplicative score penalty for documents whose URL matches a junk pattern.
+# Set to 0 to drop them entirely; we keep a small value so they can still
+# surface for rare queries where nothing better exists.
+JUNK_URL_PENALTY = 0.1
+
+
+def url_quality_prior(url):
+    """
+    A small multiplicative prior favoring canonical pages: root URLs and
+    shallow paths get a mild bump, deep paths a mild dampening. Junk
+    query strings are handled separately by JUNK_URL_PATTERNS — this
+    function intentionally does NOT punish all query strings, because
+    legitimate pages like view_faculty.php?ucinetid=lopes are canonical.
+
+    The prior is kept mild (~0.85 to ~1.08) so it only breaks ties and
+    nudges results — it must not override a genuinely stronger tf-idf
+    score.
+    """
+    if not url:
+        return 0.9
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return 0.9
+
+    path = parsed.path or "/"
+    depth = sum(1 for seg in path.split('/') if seg)
+    # Very mild depth dampening: depth 0 -> 1.0, depth 5 -> 0.80, depth 10 -> 0.67
+    prior = 1.0 / (1.0 + 0.05 * depth)
+
+    # Root / index pages get a small canonical bump.
+    if path in ('', '/') or path.rstrip('/').endswith(('/index.html', '/index.htm', '/index.php')):
+        prior *= 1.08
+
+    return prior
 
 
 def tokenize(text):
@@ -118,9 +174,36 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5):
                 d_weight /= d_length
             scores[doc_id] += q_weight * d_weight
 
+    # Post-scoring adjustments: junk-URL penalty, URL-quality prior,
+    # a short-document dampener for tiny pages, and a small bonus for
+    # documents whose URL itself mentions a query term (a classic signal
+    # that the page is "about" that term, e.g. ~lopes/ for query 'lopes').
+    SHORT_DOC_LENGTH_THRESHOLD = 1.5  # lnc norm; ~3 distinct tokens or fewer
+    SHORT_DOC_PENALTY = 0.6
+    URL_TERM_MATCH_BONUS = 0.15  # per matching query term, capped below
+
+    # Lowercase query tokens (already stemmed) for URL substring matching.
+    query_term_set = set(query_tokens)
+
     results = []
     for doc_id, score in scores.items():
         url = bookkeeping.get(doc_id, "URL_NOT_FOUND")
+
+        if JUNK_URL_PATTERNS.search(url):
+            score *= JUNK_URL_PENALTY
+
+        score *= url_quality_prior(url)
+
+        if doc_lengths.get(doc_id, 1) < SHORT_DOC_LENGTH_THRESHOLD:
+            score *= SHORT_DOC_PENALTY
+
+        # URL term match: substring search against the lowercase URL.
+        # Capped at 2 matches so a junk URL stuffed with terms can't dominate.
+        url_lower = url.lower()
+        url_matches = sum(1 for t in query_term_set if t and t in url_lower)
+        if url_matches:
+            score *= 1.0 + URL_TERM_MATCH_BONUS * min(url_matches, 2)
+
         results.append({
             "doc_id": doc_id,
             "url": url,
