@@ -1,0 +1,110 @@
+{
+    "cristina lopes": [
+        {
+            "doc_id": "www_ics_uci_edu/1df737626870a4bfb732b1181c1309321c500a04bafae755762ba7b1da22adc1.json",
+            "url": "https://www.ics.uci.edu/faculty/profiles/view_faculty.php?ucinetid=lopes",
+            "score": 0.154039
+        },
+        {
+            "doc_id": "www_informatics_uci_edu/74710be34b0d37a42e40746228bba53360c45a5495c91db6234a05e769d6105b.json",
+            "url": "https://www.informatics.uci.edu/explore/faculty-profiles/cristina-lopes/",
+            "score": 0.13429
+        },
+        {
+            "doc_id": "mondego_ics_uci_edu/32234f92a79c006e6027f831568fc099f6ed384a07d4732596acb45fd966dd7d.json",
+            "url": "http://mondego.ics.uci.edu/",
+            "score": 0.132247
+        },
+        {
+            "doc_id": "www_ics_uci_edu/8d32fb15342504573e440e19d69610e2e904d5068dff2f88b10565b27825c462.json",
+            "url": "https://www.ics.uci.edu/community/news/view_news.php?id=1207",
+            "score": 0.125931
+        },
+        {
+            "doc_id": "sdcl_ics_uci_edu/fed2c945af264295a7a4b0524412bcd6e652032e8170cbb851b19c7e56d485f3.json",
+            "url": "http://sdcl.ics.uci.edu/2016/01/congratulations-lee-martie/",
+            "score": 0.121328
+        }
+    ],
+    "machine learning": [
+        {
+            "doc_id": "cbcl_ics_uci_edu/f166e3fe873cc105ff034a4f415ed9719d1bf2988a078e5d84b8266aeac56807.json",
+            "url": "https://cbcl.ics.uci.edu/lib/exe/detail.php?id=start&media=aldrichparkuci.jpg",
+            "score": 0.491487
+        },
+        {
+            "doc_id": "archive_ics_uci_edu/6def780e4c2edba37cef1a2fd526c1b55a9860a9e680d400237c4c0a5da68545.json",
+            "url": "http://archive.ics.uci.edu/ml/machine-learning-databases/00200/",
+            "score": 0.363062
+        },
+        {
+            "doc_id": "archive_ics_uci_edu/b34295d51b584e7e746437733a51a1b12644b8a9176e93b22c55d1df526ea346.json",
+            "url": "http://archive.ics.uci.edu/ml/machine-learning-databases/cpu-performance/",
+            "score": 0.358121
+        },
+        {
+            "doc_id": "archive_ics_uci_edu/832ece87ab11085e1ce6f03cd4a260f09d29f815ec67b653c69685d3d3e37163.json",
+            "url": "http://archive.ics.uci.edu/ml/machine-learning-databases/00288/",
+            "score": 0.355697
+        },
+        {
+            "doc_id": "archive_ics_uci_edu/1e8282a1d62abb5356f3945dd884105a487f7cde19f06acd5e971e9f91c763e8.json",
+            "url": "http://archive.ics.uci.edu/ml/machine-learning-databases/00201/",
+            "score": 0.355697
+        }
+    ],
+    "ACM": [
+        {
+            "doc_id": "www_ics_uci_edu/a9aff707912bf029aea74f7674c8e9a43875e49e0b966d4820004c81ed47d942.json",
+            "url": "https://www.ics.uci.edu/~peymano/dynamic-arch/austin/peterson/tsld008.htm",
+            "score": 0.248482
+        },
+        {
+            "doc_id": "www_ics_uci_edu/b2786700feef1b1320e29f07f8023dc0d46c3890757d755ae6a45e96bcb3ddf0.json",
+            "url": "https://www.ics.uci.edu/~peymano/dynamic-arch/austin/balzer/tsld004.htm",
+            "score": 0.233831
+        },
+        {
+            "doc_id": "www_ics_uci_edu/3455996bdd7e6d0254b457309ecdd49e7374b0b341621db52e5a6fd9e90e7052.json",
+            "url": "https://www.ics.uci.edu/~tujohnso/",
+            "score": 0.213201
+        },
+        {
+            "doc_id": "www_ics_uci_edu/984b4461288b16deb03cff61f15ad0e3939a5b07ca68eb5bad661ba5dd57e573.json",
+            "url": "https://www.ics.uci.edu/~dvk/CV/cv.html",
+            "score": 0.205002
+        },
+        {
+            "doc_id": "www_ics_uci_edu/c5aecf0cbf50f7c948d9f15d98b723494c2d800016bdfa8246c891d6a5df2b6a.json",
+            "url": "https://www.ics.uci.edu/~irus/wisen/twist99/presentations/ellison/tsld009.htm",
+            "score": 0.204708
+        }
+    ],
+    "master of software engineering": [
+        {
+            "doc_id": "mswe_ics_uci_edu/97ec17cf1e572a9f25e55b7dc0718b979dd5c9bfe6c3eb78ea20c88c0c68a4e1.json",
+            "url": "https://mswe.ics.uci.edu/career/",
+            "score": 0.280918
+        },
+        {
+            "doc_id": "mswe_ics_uci_edu/1efc6180dc3995d65127a94a74265604aeb1d21e8e803ba86f35be473004e2c2.json",
+            "url": "https://mswe.ics.uci.edu/program/",
+            "score": 0.280738
+        },
+        {
+            "doc_id": "mswe_ics_uci_edu/345e4bd69edf6a2f141c8c21def641be10f14fecfdd73ab049b6f99c522b3b13.json",
+            "url": "https://mswe.ics.uci.edu/admissions/",
+            "score": 0.280449
+        },
+        {
+            "doc_id": "mswe_ics_uci_edu/812072c281f4ed88fcc5489bc6f3cdf86617d815da1e948f81629f2671fbcdbf.json",
+            "url": "https://mswe.ics.uci.edu/admissions/information_sessions/",
+            "score": 0.275959
+        },
+        {
+            "doc_id": "www_ics_uci_edu/6b51740ad7fc57079b0a993e219b70c0310890bb16be915a0eda43d9c79da305.json",
+            "url": "https://www.ics.uci.edu/~lopes/",
+            "score": 0.244346
+        }
+    ]
+}

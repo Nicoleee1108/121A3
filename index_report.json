@@ -1,5 +1,6 @@
 {
-    "document_count": 55086,
-    "unique_tokens": 1224781,
-    "index_size_kb": 1503038.625
+    "document_count": 37149,
+    "unique_tokens": 708137,
+    "index_size_kb": 767458.9462890625,
+    "num_partial_indexes": 6
 }

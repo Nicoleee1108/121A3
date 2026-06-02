@@ -1,9 +1,20 @@
 # Corpus / data
 DEV/
 
-# Build artifacts
+# Build artifacts (too large for git)
 inverted_index.json
+inverted_index.jsonl
+bookkeeping.json
+doc_lengths.json
+index_offsets.json
+partial_indexes/
 indexer_run.log
+
+# Evaluation outputs
+benchmark_results.json
+
+# Submission archives
+A3-1.zip
 
 # OS / IDE
 .DS_Store
