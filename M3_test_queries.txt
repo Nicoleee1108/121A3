@@ -1,0 +1,215 @@
+================================================================================
+CS121 / INF141  Assignment 3 - Milestone 3
+Test Queries and Retrieval-Improvement Report
+================================================================================
+
+Team (Algorithms & Data Structures developer option):
+  Yuqi Chen   - yuqic22@uci.edu
+  Nicole Ying - jiayey1@uci.edu
+  Yang Zhang  - yangz75@uci.edu
+  Yulin Zhou  - yulingz6@uci.edu
+
+Index built over the DEV corpus:
+  Documents indexed (after URL + exact-content + SimHash near-dup removal): 37,162
+  Unique tokens: 723,867
+  Final inverted index on disk: ~771 MB  (inverted_index.jsonl)
+
+How to reproduce the evaluation:
+  python benchmark_queries.py
+  (prints per-query latency + top-5 URLs, writes benchmark_results.json)
+
+Evaluation setup:
+  We use 28 test queries (above the required 20). Our Milestone 2 baseline was
+  plain lnc.ltc cosine ranking with AND semantics, disk-backed postings, and
+  important-word fields in the index, but without any Milestone 3 URL/structure
+  heuristics. Of the 28 queries, 10 already returned plausible top results on
+  that baseline and serve as regression tests. The other 18 were chosen because
+  their top results were clearly wrong (junk URLs, tiny slides, wrong canonical
+  page, or deep page beating a site home page). Milestone 3 adds five general
+  post-scoring heuristics on top of the same IR core; efficiency stayed under
+  300 ms for every query (average ~65 ms on our machine).
+
+
+--------------------------------------------------------------------------------
+1. QUERIES THAT WERE ALREADY GOOD (regression tests, 10 queries)
+--------------------------------------------------------------------------------
+These queries already returned reasonable, on-topic pages in the top-5 under
+the Milestone 2 baseline. We kept them to verify that Milestone 3 changes did
+not break retrieval that was already working. After all M3 changes they still
+return sensible results (see benchmark_results.json).
+
+  (1)  chakrabarti
+       M2/M3: faculty/student and related research pages (e.g. ~sharad/students).
+
+  (2)  donald bren
+       M2/M3: pages that mention Donald Bren School / foundation in context.
+
+  (3)  software engineering capstone
+       M2/M3: MSWE and informatics capstone-related program pages in top-5.
+
+  (4)  natural language processing
+       M2/M3: course/seminar/project pages about NLP in top-5.
+
+  (5)  computer vision
+       M2/M3: vision.ics.uci.edu lab pages dominate top-5.
+
+  (6)  embedded systems
+       M2/M3: xtune project and related embedded-systems pages in top-5.
+
+  (7)  graduate admissions
+       M2/M3: graduate program and MCS-related pages in top-5.
+
+  (8)  iui conference
+       M2/M3: publication/resource pages mentioning IUI (only 4 docs match
+       both terms under AND, so at most 4 results).
+
+  (9)  data science master
+       M2/M3: CS/informatics news and program pages about data science / masters.
+
+  (10) open house ics
+       M2/M3: ICS open-house and WICS event pages in top-5.
+
+
+--------------------------------------------------------------------------------
+2. QUERIES THAT PERFORMED POORLY ON M2 (18 queries, one problem each)
+--------------------------------------------------------------------------------
+For each query below: what was wrong on the M2 baseline, then how M3 behaves now
+(after our code changes). Top URLs refer to our latest benchmark run.
+
+  (1)  machine learning
+       M2 problem: #1 was a non-content junk page (cbcl image detail view:
+       .../detail.php?media=...jpg) that happened to match strongly.
+       M3 now: junk URL gone; top results are archive.ics.uci.edu machine-learning
+       dataset directory pages.
+
+  (2)  informatics
+       M2 problem: #1 was informatics.uci.edu/xmlrpc.php?rsd (WordPress endpoint,
+       not a human-readable informatics page).
+       M3 now: xmlrpc no longer in top-5; top pages are real sites that mention
+       informatics (still not necessarily the main informatics school home page).
+
+  (3)  mondego
+       M2 problem: #1 was Apache directory-sort junk (mondego/?C=N;O=A).
+       M3 now: sort link gone; top results are mondego project/tool pages and
+       related lab pages (mondego.ics.uci.edu/ home is in top-5 but not #1).
+
+  (4)  ACM
+       M2 problem: #1 was a single presentation slide (.../tsld008.htm) with
+       "ACM" in the title.
+       M3 now: numbered slide URLs penalized; top-5 are faculty pages and an
+       ACM news post with real content.
+
+  (5)  computer game science
+       M2 problem: #1 was a GameLab numbered slide (v3_slide0014.htm).
+       M3 now: slide penalized; frost.ics.uci.edu/ is #1, then related program
+       and news pages.
+
+  (6)  system
+       M2 problem: top-5 were almost all tiny presentation slides (sld00X.htm)
+       tied at the same high cosine score because "system" appeared in titles.
+       M3 now: no slide pages in top-5; fuller pages such as ugradforms.ics.uci.edu
+       and course/system documentation pages rank higher.
+
+  (7)  data
+       M2 problem: top-5 dominated by numbered slides and other near-empty pages.
+       M3 now: slides gone; mix of course notes and cbcl public_data pages.
+
+  (8)  research
+       M2 problem: #1 was kobsa-researchframe.htm (almost-empty frameset with
+       "research" only in the title, boosted to ~0.85).
+       M3 now: nalini.ics.uci.edu/research/ is #1; frameset page still in top-5
+       but no longer dominates.
+
+  (9)  design
+       M2 problem: top results were short slide/stub pages with "design" in a
+       heading, not substantive design content.
+       M3 now: longer course-note and talk pages in top-5; slide junk removed.
+
+  (10) cristina lopes
+       M2 problem: Mondego project home outranked her faculty profile even though
+       the profile is the canonical "about this person" page.
+       M3 now: informatics faculty profile is #1; ICS faculty profile and ~lopes/
+       pages also in top-5.
+
+  (11) eppstein
+       M2 problem: random high-tf pages beat clear ~eppstein/ home-style pages;
+       crawled .git metadata under ~eppstein/PADS/ also scores highly.
+       M3 now: ~eppstein/ publication pages rank high, but .git paths can still
+       appear in top-5 (not yet covered by junk URL patterns).
+
+  (12) tippers
+       M2 problem: busier ICS pages mentioning TIPPERS outranked the project site.
+       M3 now: tippersweb.ics.uci.edu/ is a clear #1.
+
+  (13) iftekhar ahmed
+       M2 problem: generic seminar/slide pages outranked the informatics faculty
+       profile and ~iftekha/ publication pages.
+       M3 now: profile and ~iftekha/ pages are in top-5; two course slide index
+       pages still rank #1-#2 (room for further tuning).
+
+  (14) kobsa
+       M2 problem: kobsa-researchframe.htm and tiny course stubs outranked the
+       main faculty home page.
+       M3 now: ~kobsa/index.html is #1 with a large score gap over other ~kobsa/
+       pages.
+
+  (15) master of software engineering
+       M2 problem: a deep MSWE sub-page outranked the program home page.
+       M3 now: mswe.ics.uci.edu/ is #1, followed by other mswe.ics.uci.edu pages.
+
+  (16) student council ics
+       M2 problem: deep or tangential pages outranked the student council site.
+       M3 now: studentcouncil.ics.uci.edu/ is #1.
+
+  (17) transformative play
+       M2 problem: internal member pages outranked the lab home page.
+       M3 now: transformativeplay.ics.uci.edu/ is #1.
+
+  (18) frost game lab
+       M2 problem: deep GameLab slide/outline pages outranked frost.ics.uci.edu/.
+       M3 now: GameLab v3_outline_expanded.htm is still #1 (URL does not match our
+       numbered-slide junk regex); frost home does not appear in top-5 for this
+       exact three-word query. Related query "computer game science" does put
+       frost.ics.uci.edu/ at #1 after slide penalties.
+
+
+--------------------------------------------------------------------------------
+3. WHAT WE CHANGED IN MILESTONE 3 (code changes in search.py)
+--------------------------------------------------------------------------------
+All changes are general heuristics applied as multipliers after lnc.ltc cosine
+scoring, so the IR core is unchanged.
+
+  (1) JUNK_URL_PATTERNS (score *= 0.1)
+      Penalize URL shapes that are usually non-content: image detail views,
+      xmlrpc.php, Apache ?C=N;O=A directory-sort links, login/edit/diff pages,
+      numbered single-slide pages (tsld/sld/slideNNN), and frame container pages.
+      Fixes junk-at-#1 problems for queries (1)-(5) above.
+
+  (2) IMPORTANT_BOOST lowered from 2 to 1
+      Title/heading/bold terms still get extra weight via imp_tf, but a smaller
+      boost stops 10-word slide pages from looking as strong as full articles.
+      Works together with (3) for queries (6)-(9).
+
+  (3) Short-document penalty (score *= 0.6 when lnc doc length < 1.5)
+      Demotes pages with only a handful of distinct tokens (stubs, slides).
+      Helps queries (6)-(9) and reduces frameset dominance for (8).
+
+  (4) URL term-match bonus (up to 1.30x, capped at 2 matching query terms)
+      If a stemmed query term appears in the URL path, boost the score — strong
+      signal that the page is "about" that entity. Helps queries (10)-(14).
+
+  (5) URL quality prior (~0.80-1.08x)
+      Mild bump for root/index URLs; mild dampening for very deep paths. Helps
+      program/org home pages rank first for queries (15)-(17).
+
+Indexer (unchanged for M3 report scope, but required for developer option):
+  Partial indexes spilled every 10,000 documents, streaming k-way merge to
+  inverted_index.jsonl + index_offsets.json; URL and exact-content dedup plus
+  SimHash near-duplicate removal during indexing.
+
+Search efficiency (developer option):
+  Index never fully loaded; one disk seek per query term via offset map; AND
+  implemented by intersecting per-term doc-id sets. All 28 queries < 300 ms.
+
+
+================================================================================
