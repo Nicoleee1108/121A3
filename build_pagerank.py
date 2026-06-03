@@ -1,8 +1,8 @@
 """
-Build pagerank.json from an existing index (no full re-index required).
+PageRank 离线脚本（Extra Credit）/ offline PageRank builder (extra credit)
 
-Run after doc_lengths.json exists:
-  python build_pagerank.py
+Build pagerank.json without full re-index / 不必重建整个倒排索引
+Run after doc_lengths.json exists:  python build_pagerank.py
 """
 
 import json

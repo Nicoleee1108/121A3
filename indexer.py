@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from collections import defaultdict
 from nltk.stem import PorterStemmer
 
+# Extra credit: PageRank + anchor text / 加分项：PageRank 与锚文本
 from pagerank import (
     extract_outlink_urls,
     extract_anchor_links,
@@ -141,8 +142,8 @@ def process_document(file_path):
         'url': url,
         'content_hash': content_hash,
         'simhash': simhash_val,
-        'outlink_urls': extract_outlink_urls(url, html_content),
-        'anchor_links': extract_anchor_links(url, html_content),
+        'outlink_urls': extract_outlink_urls(url, html_content),   # PR graph
+        'anchor_links': extract_anchor_links(url, html_content),  # anchor EC
     }
 
 
@@ -161,9 +162,9 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
     in_memory = defaultdict(list)
     doc_lengths = {}
     simhashes = {}            # doc_id -> 64-bit SimHash (for near-dup phase)
-    doc_urls = {}
-    outlink_urls_by_doc = {}
-    anchor_links_by_doc = {}
+    doc_urls = {}              # for PageRank + anchor URL lookup
+    outlink_urls_by_doc = {}   # PageRank edges
+    anchor_links_by_doc = {}   # (target_url, anchor_text) per page
     seen_urls = set()
     seen_content_hashes = set()
     doc_count = 0
@@ -271,7 +272,10 @@ def build_anchor_tf(doc_urls, anchor_links_by_doc, kept_doc_ids):
 
 
 def dump_anchor_partial(anchor_tf_by_doc, partial_dir, exclude_doc_ids=None):
-    """Write anchor-only postings as an extra partial index for k-way merge."""
+    """
+    Write anchor_tf postings as extra partial for k-way merge.
+    写出仅含 anchor_tf 的 partial，与正文 partial 一起 merge。
+    """
     exclude = exclude_doc_ids or set()
     index = defaultdict(list)
     for doc_id, terms in anchor_tf_by_doc.items():
@@ -283,7 +287,7 @@ def dump_anchor_partial(anchor_tf_by_doc, partial_dir, exclude_doc_ids=None):
                     "doc_id": doc_id,
                     "tf": 0,
                     "imp_tf": 0,
-                    "anchor_tf": freq,
+                    "anchor_tf": freq,  # body tf=0; anchor only on target
                 })
 
     os.makedirs(partial_dir, exist_ok=True)
@@ -411,6 +415,7 @@ def merge_partials(partial_paths, output_file, offsets_file, exclude_doc_ids=Non
                 dropped_terms += 1
                 continue
 
+            # Extra credit: fold anchor_tf into postings / 合并锚文本字段
             merged_postings = _merge_postings_for_term(merged_postings)
 
             offsets[term] = out.tell()
@@ -490,6 +495,7 @@ def main():
         d: outlink_urls_by_doc[d] for d in kept_doc_ids if d in outlink_urls_by_doc
     }
 
+    # --- Extra Credit: anchor text on target pages / 锚文本记在目标页 ---
     print("\n" + "=" * 60)
     print("Phase 1.55: Anchor text indexing (words in <a> -> target page)")
     print("=" * 60)
@@ -502,6 +508,7 @@ def main():
     print(f"  Target docs with anchor tokens: {len(anchor_tf_by_doc)}")
     print(f"  Anchor partial terms: {anchor_terms} -> {anchor_partial_path}")
 
+    # --- Extra Credit: PageRank d=0.85 / 网页排名 ---
     print("\n" + "=" * 60)
     print("Phase 1.6: PageRank (link graph from <a href>, d=0.85)")
     print("=" * 60)

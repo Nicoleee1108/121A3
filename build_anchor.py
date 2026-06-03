@@ -1,10 +1,10 @@
 """
-Build anchor_partial.jsonl from DEV (extra credit: anchor words on target pages).
+Anchor 锚文本离线脚本（Extra Credit）/ anchor-text partial builder (extra credit)
 
-Full index update requires merging this partial with body partials:
-  - Best: python indexer.py  (rebuilds everything including anchor)
-  - Or: if partial_indexes/partial_*.jsonl still exist, append anchor partial
-    and re-run merge (see indexer.merge_partials).
+Anchor words on target pages are indexed on the page being linked TO.
+锚文字记在「被链接指向」的页面上。
+
+Full merge: python indexer.py  (recommended / 推荐)
 """
 
 import json

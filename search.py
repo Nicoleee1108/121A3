@@ -11,13 +11,14 @@ OFFSETS_FILE = "index_offsets.json"
 DOC_LENGTHS_FILE = "doc_lengths.json"
 BOOKKEEPING_FILE = "bookkeeping.json"
 INDEX_REPORT_FILE = "index_report.json"
-PAGERANK_FILE = "pagerank.json"
+PAGERANK_FILE = "pagerank.json"  # Extra Credit: offline PR scores / PageRank 分数
 
 # Important-word boost: terms in <title>/<h1-3>/<b>/<strong> count this many
 # extra times. Lowered from 2 -> 1 because high boost on tiny slide pages
 # was making 10-word presentation slides outrank full content pages.
 IMPORTANT_BOOST = 1
-# Anchor text extra credit: tokens in <a href> pointing to this page (see indexer).
+# Extra Credit: anchor_tf from links pointing TO this page (see indexer)
+# 加分项：别人链到本页的 <a> 文字，记入 anchor_tf
 ANCHOR_BOOST = 1
 
 # URL patterns that almost always indicate junk pages (image detail views,
@@ -197,9 +198,11 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
         if url_matches:
             score *= 1.0 + URL_TERM_MATCH_BONUS * min(url_matches, 2)
 
+        # Extra Credit: PageRank multiplies tf-idf score (if pagerank.json exists)
+        # 加分项：有 pagerank.json 时，按链接重要性调整分数
         if pagerank:
             pr = pagerank.get(doc_id, 1.0 / N)
-            score *= pr * N
+            score *= pr * N  # scale so average page ~1x / 平均页约 1 倍
 
         results.append({
             "doc_id": doc_id,
@@ -267,6 +270,7 @@ def interactive_search(reader, bookkeeping, doc_lengths, N, pagerank=None):
 
 
 def load_pagerank_optional(path=PAGERANK_FILE):
+    """Load PR if present; None = search without PageRank / 无文件则不用 PR"""
     import os
     if not os.path.isfile(path):
         return None
