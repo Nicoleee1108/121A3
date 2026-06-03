@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ query }} — ICS Search</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+           max-width: 820px; margin: 4vh auto; padding: 0 16px; color: #222; }
+    form { display: flex; gap: 8px; margin-bottom: 8px; }
+    input[type=text] { flex: 1; padding: 9px 12px; font-size: 15px;
+                       border: 1px solid #bbb; border-radius: 6px; }
+    button { padding: 9px 16px; font-size: 15px; border: 0; border-radius: 6px;
+             background: #2152a3; color: #fff; cursor: pointer; }
+    button:hover { background: #18407e; }
+    .meta { color: #666; font-size: 14px; margin: 6px 0 20px; }
+    ol { padding-left: 28px; }
+    li { margin-bottom: 16px; }
+    a.url { color: #1a0dab; text-decoration: none; font-size: 16px;
+            word-break: break-all; }
+    a.url:hover { text-decoration: underline; }
+    .score { color: #0a8a3a; font-size: 13px; }
+    .empty { color: #a00; }
+    a.home { font-size: 14px; }
+  </style>
+</head>
+<body>
+  <form action="/search" method="get">
+    <input type="text" name="q" value="{{ query }}" autofocus>
+    <button type="submit">Search</button>
+  </form>
+  <p class="meta">
+    {{ num_results }} result{{ '' if num_results == 1 else 's' }}
+    for <strong>{{ query }}</strong>
+    &middot; {{ elapsed_ms }} ms
+  </p>
+
+  {% if results %}
+  <ol>
+    {% for r in results %}
+    <li>
+      <a class="url" href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url }}</a>
+      <div class="score">score = {{ r.score }}</div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty">No results found.</p>
+  {% endif %}
+
+  <p><a class="home" href="/">← New search</a></p>
+</body>
+</html>

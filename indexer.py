@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from collections import defaultdict
 from nltk.stem import PorterStemmer
 
-# Extra credit: PageRank + anchor text / 加分项：PageRank 与锚文本
+# Extra credit: PageRank and anchor text.
 from pagerank import (
     extract_outlink_urls,
     extract_anchor_links,
@@ -17,18 +17,28 @@ from pagerank import (
     normalize_url,
 )
 
-#Porter Stemming initializing the instance
+# One Porter stemmer instance, reused for every token.
 stemmer = PorterStemmer()
 
 IMPORTANT_TAGS = ['title', 'h1', 'h2', 'h3', 'b', 'strong']
 
-# SimHash near-duplicate detection parameters
+# EXTRA CREDIT: biword (2-gram) index ----------------------------------------
+# Drop biwords occurring in fewer than this many documents to bound the index
+# size (most 2-grams are unique noise). df >= 2 keeps phrase-worthy bigrams.
+BIWORD_MIN_DF = 2
+# Partial-file paths for the separate biword index, collected during
+# build_partial_indexes. Kept as a module-level accumulator so the existing
+# build_partial_indexes() return signature stays untouched -- this keeps the
+# teammates' PageRank/anchor code merging cleanly.
+_biword_partial_paths = []
+
+# SimHash settings for near-duplicate detection.
 SIMHASH_BITS = 64
-SIMHASH_THRESHOLD = 3  # Hamming distance <= 3 -> near-duplicate
-SIMHASH_BANDS = 4      # Pigeon-hole: 4 bands of 16 bits each guarantees that
-                       # any pair with Hamming dist <= 3 shares at least one
-                       # band exactly, so candidates can be found without
-                       # all-pairs comparison.
+SIMHASH_THRESHOLD = 3  # treat docs within 3 bits of each other as near-duplicates
+SIMHASH_BANDS = 4      # Split the 64 bits into 4 bands of 16. If two hashes
+                       # are within 3 bits, at least one band has to match
+                       # exactly, so we can find candidates without comparing
+                       # every possible pair.
 
 
 def tokenize(text):
@@ -43,7 +53,7 @@ def tokenize(text):
                 buffer = []
     if buffer:
         tokens.append("".join(buffer))
-    #Porter Stemming
+    # stem each token before returning
     return [stemmer.stem(t) for t in tokens]
 
 
@@ -76,9 +86,9 @@ def _hash64(s):
 
 def compute_simhash(tf_dict):
     """
-    Charikar's SimHash. For each unique token, hash it to 64 bits and add
-    +weight or -weight to each bit-position counter depending on the bit value.
-    Final SimHash bit i = 1 iff counter i > 0.
+    Charikar's SimHash. Hash each token to 64 bits. For every bit position,
+    add the token's weight when that bit is 1 and subtract it when the bit is
+    0. The final hash has a 1 wherever the running total came out positive.
     """
     counters = [0] * SIMHASH_BITS
     for token, weight in tf_dict.items():
@@ -98,9 +108,9 @@ def compute_simhash(tf_dict):
 def process_document(file_path):
     """
     Parse one crawled JSON file. Returns a dict with the doc's tf/imp_tf
-    weights, pre-computed doc length, URL, content hash, and SimHash
-    signature -- or None if the document yields no tokens. The caller is
-    responsible for dedup decisions.
+    weights, the precomputed doc length, URL, content hash, and SimHash
+    signature, or None if the page has no tokens. Deduplication is left
+    to the caller.
     """
     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
         data = json.load(f)
@@ -121,6 +131,19 @@ def process_document(file_path):
     for token in all_tokens:
         tf[token] += 1
 
+    # EXTRA CREDIT: positions -- record each token's 0-based position in the
+    # full token stream (Emit(word, docid:position); position increments per
+    # token). Consumed by proximity (smallest-window) scoring in search.py.
+    positions = defaultdict(list)
+    for pos, token in enumerate(all_tokens):
+        positions[token].append(pos)
+
+    # EXTRA CREDIT: biword -- 2-gram term frequencies from adjacent tokens
+    # ("machin learn"). Stored in a SEPARATE biword index for phrase queries.
+    biword_tf = defaultdict(int)
+    for i in range(len(all_tokens) - 1):
+        biword_tf[all_tokens[i] + " " + all_tokens[i + 1]] += 1
+
     imp_tf = defaultdict(int)
     for token in imp_tokens:
         imp_tf[token] += 1
@@ -138,12 +161,14 @@ def process_document(file_path):
     return {
         'tf': tf,
         'imp_tf': imp_tf,
+        'positions': positions,  # EXTRA CREDIT: positions (token -> [pos,...])
+        'biword_tf': biword_tf,  # EXTRA CREDIT: biword (2-gram -> tf)
         'doc_length': doc_length,
         'url': url,
         'content_hash': content_hash,
         'simhash': simhash_val,
-        'outlink_urls': extract_outlink_urls(url, html_content),   # PR graph
-        'anchor_links': extract_anchor_links(url, html_content),  # anchor EC
+        'outlink_urls': extract_outlink_urls(url, html_content),   # PageRank link graph
+        'anchor_links': extract_anchor_links(url, html_content),  # anchor text (extra credit)
     }
 
 
@@ -172,6 +197,15 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
     content_dup_count = 0
     partial_count = 0
     partial_paths = []
+
+    # EXTRA CREDIT: biword -- separate in-memory 2-gram index, offloaded to its
+    # own subdir on the SAME every-10k cadence as the body index so the
+    # disk-based architecture is preserved. Paths go to the module accumulator.
+    global _biword_partial_paths
+    _biword_partial_paths = []
+    biword_partial_dir = os.path.join(partial_dir, "biword")
+    biword_in_memory = defaultdict(list)
+    biword_partial_count = 0
 
     for dirpath, _, filenames in os.walk(root_dir):
         for filename in filenames:
@@ -202,13 +236,20 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
 
             tf_dict = result['tf']
             imp_tf_dict = result['imp_tf']
+            pos_dict = result['positions']  # EXTRA CREDIT: positions
             for token, freq in tf_dict.items():
                 posting = {
                     "doc_id": doc_id,
                     "tf": freq,
-                    "imp_tf": imp_tf_dict.get(token, 0)
+                    "imp_tf": imp_tf_dict.get(token, 0),
+                    # EXTRA CREDIT: positions list for proximity scoring
+                    "pos": pos_dict.get(token, []),
                 }
                 in_memory[token].append(posting)
+
+            # EXTRA CREDIT: biword -- accumulate 2-gram postings for this doc.
+            for biword, freq in result['biword_tf'].items():
+                biword_in_memory[biword].append({"doc_id": doc_id, "tf": freq})
 
             doc_count += 1
 
@@ -219,6 +260,13 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
                 in_memory = defaultdict(list)
                 print(f"  -> Dumped partial #{partial_count} at {doc_count} docs")
 
+                # EXTRA CREDIT: biword -- offload the 2-gram partial in lockstep.
+                biword_partial_count += 1
+                bpath = dump_partial_index(
+                    biword_in_memory, biword_partial_dir, biword_partial_count)
+                _biword_partial_paths.append(bpath)
+                biword_in_memory = defaultdict(list)
+
             if doc_count % 1000 == 0:
                 print(f"Processed {doc_count} documents "
                       f"(URL dups: {url_dup_count}, content dups: {content_dup_count}).")
@@ -228,6 +276,14 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
         path = dump_partial_index(in_memory, partial_dir, partial_count)
         partial_paths.append(path)
         print(f"  -> Dumped final partial #{partial_count} at {doc_count} docs")
+
+    # EXTRA CREDIT: biword -- flush the final 2-gram partial.
+    if biword_in_memory:
+        biword_partial_count += 1
+        bpath = dump_partial_index(
+            biword_in_memory, biword_partial_dir, biword_partial_count)
+        _biword_partial_paths.append(bpath)
+        print(f"  -> Dumped final biword partial #{biword_partial_count}")
 
     print(f"\nDedup summary (during scan):")
     print(f"  URL duplicates skipped:     {url_dup_count}")
@@ -273,8 +329,8 @@ def build_anchor_tf(doc_urls, anchor_links_by_doc, kept_doc_ids):
 
 def dump_anchor_partial(anchor_tf_by_doc, partial_dir, exclude_doc_ids=None):
     """
-    Write anchor_tf postings as extra partial for k-way merge.
-    写出仅含 anchor_tf 的 partial，与正文 partial 一起 merge。
+    Write the anchor_tf postings as one more partial so they get merged
+    together with the body partials in the k-way merge.
     """
     exclude = exclude_doc_ids or set()
     index = defaultdict(list)
@@ -309,28 +365,36 @@ def _merge_postings_for_term(postings):
                 "tf": p.get("tf", 0),
                 "imp_tf": p.get("imp_tf", 0),
                 "anchor_tf": p.get("anchor_tf", 0),
+                # EXTRA CREDIT: positions -- carried through the merge. Body
+                # partials supply the list; the anchor partial has none. A
+                # (term, doc_id) body posting lives in exactly one partial, so
+                # this is the doc's complete position list for the term.
+                "pos": p.get("pos", []),
             }
         else:
             cur = by_doc[doc_id]
             cur["tf"] += p.get("tf", 0)
             cur["imp_tf"] = max(cur["imp_tf"], p.get("imp_tf", 0))
             cur["anchor_tf"] = max(cur["anchor_tf"], p.get("anchor_tf", 0))
+            # EXTRA CREDIT: keep whichever side carries positions (body does).
+            if p.get("pos"):
+                cur["pos"] = sorted(cur["pos"] + p["pos"]) if cur["pos"] else p["pos"]
     return list(by_doc.values())
 
 
 def find_simhash_near_duplicates(simhashes, threshold=SIMHASH_THRESHOLD,
                                   bands=SIMHASH_BANDS):
     """
-    Find near-duplicate documents by SimHash. Two docs are considered
-    near-duplicates when the Hamming distance of their SimHashes is <= threshold.
+    Find near-duplicate documents with SimHash. Two docs count as
+    near-duplicates when their SimHashes differ in at most `threshold` bits.
 
-    Pigeon-hole trick: split each 64-bit SimHash into `bands` equal chunks.
-    If two simhashes differ in at most `threshold` bits and bands > threshold,
-    at least one chunk must be identical. So we only need to compare docs
-    that share at least one chunk -- not all O(n^2) pairs.
+    The pigeon-hole trick: split each 64-bit SimHash into `bands` equal
+    chunks. If two hashes differ by at most `threshold` bits and there are
+    more bands than that, at least one chunk has to be identical. So we only
+    compare docs that share a chunk instead of checking all O(n^2) pairs.
 
-    Returns: set of doc_ids to remove (keeps the first occurrence seen in
-    each near-duplicate cluster).
+    Returns the set of doc_ids to drop, keeping the first doc seen in each
+    near-duplicate cluster.
     """
     assert bands > threshold, "need bands > threshold for the pigeon-hole guarantee"
     chunk_width = SIMHASH_BITS // bands
@@ -415,7 +479,7 @@ def merge_partials(partial_paths, output_file, offsets_file, exclude_doc_ids=Non
                 dropped_terms += 1
                 continue
 
-            # Extra credit: fold anchor_tf into postings / 合并锚文本字段
+            # Extra credit: fold the anchor_tf field into the postings.
             merged_postings = _merge_postings_for_term(merged_postings)
 
             offsets[term] = out.tell()
@@ -441,6 +505,88 @@ def merge_partials(partial_paths, output_file, offsets_file, exclude_doc_ids=Non
               f"belonged to near-duplicate docs")
 
     return unique_tokens, offsets
+
+
+def merge_biword_partials(partial_paths, output_file, offsets_file,
+                          exclude_doc_ids=None, min_df=BIWORD_MIN_DF):
+    """
+    EXTRA CREDIT: biword (2-gram) index.
+
+    K-way merge of the sorted biword partials into a SEPARATE disk-based index
+    (biword_index.jsonl) with its own term -> byte-offset map. Same streaming
+    architecture as merge_partials: never holds the full index in memory.
+    Postings are {doc_id, tf}; near-duplicate docs are excluded and biwords
+    with df < min_df are dropped to keep the index small.
+    Returns (num_biwords, dropped_lowdf).
+    """
+    if not partial_paths:
+        with open(offsets_file, 'w', encoding='utf-8') as f:
+            json.dump({}, f)
+        open(output_file, 'wb').close()
+        return 0, 0
+
+    file_handles = [open(p, 'r', encoding='utf-8') for p in partial_paths]
+    heap = []
+    for i, fh in enumerate(file_handles):
+        line = fh.readline()
+        if line:
+            entry = json.loads(line)
+            heap.append((entry["term"], i, entry["postings"]))
+    heapq.heapify(heap)
+
+    exclude = exclude_doc_ids or set()
+    offsets = {}
+    num_biwords = 0
+    dropped_lowdf = 0
+    with open(output_file, 'wb') as out:
+        while heap:
+            term, file_idx, postings = heapq.heappop(heap)
+            # Sum tf per doc_id across all partials that carry this biword.
+            by_doc = {}
+            for p in postings:
+                if p['doc_id'] not in exclude:
+                    by_doc[p['doc_id']] = by_doc.get(p['doc_id'], 0) + p['tf']
+
+            next_line = file_handles[file_idx].readline()
+            if next_line:
+                ne = json.loads(next_line)
+                heapq.heappush(heap, (ne["term"], file_idx, ne["postings"]))
+
+            while heap and heap[0][0] == term:
+                _, other_idx, other_postings = heapq.heappop(heap)
+                for p in other_postings:
+                    if p['doc_id'] not in exclude:
+                        by_doc[p['doc_id']] = by_doc.get(p['doc_id'], 0) + p['tf']
+                nl = file_handles[other_idx].readline()
+                if nl:
+                    ne = json.loads(nl)
+                    heapq.heappush(heap, (ne["term"], other_idx, ne["postings"]))
+
+            # df pruning: drop rare biwords (most 2-grams are unique noise).
+            if len(by_doc) < min_df:
+                dropped_lowdf += 1
+                continue
+
+            merged_postings = [{"doc_id": d, "tf": t} for d, t in by_doc.items()]
+            offsets[term] = out.tell()
+            line_bytes = (json.dumps({
+                "term": term,
+                "df": len(merged_postings),
+                "postings": merged_postings,
+            }) + '\n').encode('utf-8')
+            out.write(line_bytes)
+            num_biwords += 1
+
+            if num_biwords % 100000 == 0:
+                print(f"  Merged {num_biwords} biwords...")
+
+    for fh in file_handles:
+        fh.close()
+
+    with open(offsets_file, 'w', encoding='utf-8') as f:
+        json.dump(offsets, f)
+
+    return num_biwords, dropped_lowdf
 
 
 def save_report(document_count, unique_tokens, index_size_kb, num_partials, output_file):
@@ -495,7 +641,7 @@ def main():
         d: outlink_urls_by_doc[d] for d in kept_doc_ids if d in outlink_urls_by_doc
     }
 
-    # --- Extra Credit: anchor text on target pages / 锚文本记在目标页 ---
+    # Extra credit: store anchor text on the page it points to.
     print("\n" + "=" * 60)
     print("Phase 1.55: Anchor text indexing (words in <a> -> target page)")
     print("=" * 60)
@@ -508,7 +654,7 @@ def main():
     print(f"  Target docs with anchor tokens: {len(anchor_tf_by_doc)}")
     print(f"  Anchor partial terms: {anchor_terms} -> {anchor_partial_path}")
 
-    # --- Extra Credit: PageRank d=0.85 / 网页排名 ---
+    # Extra credit: PageRank with d=0.85.
     print("\n" + "=" * 60)
     print("Phase 1.6: PageRank (link graph from <a href>, d=0.85)")
     print("=" * 60)
@@ -529,6 +675,21 @@ def main():
         partial_paths, output_file, offsets_file,
         exclude_doc_ids=near_dup_doc_ids)
 
+    # EXTRA CREDIT: biword -- merge the 2-gram partials into a separate
+    # disk-based index (biword_index.jsonl + biword_offsets.json).
+    print("\n" + "=" * 60)
+    print("Phase 2.5: K-way merging biword (2-gram) partials")
+    print("=" * 60)
+    biword_index_file = "biword_index.jsonl"
+    biword_offsets_file = "biword_offsets.json"
+    num_biwords, dropped_lowdf = merge_biword_partials(
+        _biword_partial_paths, biword_index_file, biword_offsets_file,
+        exclude_doc_ids=near_dup_doc_ids, min_df=BIWORD_MIN_DF)
+    biword_size_kb = os.path.getsize(biword_index_file) / 1024
+    print(f"  Biword partials merged: {len(_biword_partial_paths)}")
+    print(f"  Biwords kept (df>={BIWORD_MIN_DF}): {num_biwords} "
+          f"(dropped {dropped_lowdf} rare biwords)")
+
     final_doc_count = len(filtered_doc_lengths)
     index_size_kb = os.path.getsize(output_file) / 1024
     save_report(final_doc_count, unique_tokens, index_size_kb,
@@ -543,6 +704,9 @@ def main():
     print(f"Offset map:        {offsets_file} ({len(offsets)} entries)")
     print(f"Doc lengths:       {doc_lengths_file}")
     print(f"PageRank scores:   {pagerank_file}")
+    print(f"Biword index:      {biword_index_file} ({biword_size_kb:.2f} KB, "
+          f"{num_biwords} biwords)")
+    print(f"Biword offsets:    {biword_offsets_file}")
 
 
 if __name__ == "__main__":

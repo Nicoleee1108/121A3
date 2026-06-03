@@ -11,14 +11,17 @@ OFFSETS_FILE = "index_offsets.json"
 DOC_LENGTHS_FILE = "doc_lengths.json"
 BOOKKEEPING_FILE = "bookkeeping.json"
 INDEX_REPORT_FILE = "index_report.json"
-PAGERANK_FILE = "pagerank.json"  # Extra Credit: offline PR scores / PageRank 分数
+PAGERANK_FILE = "pagerank.json"  # Extra credit: offline PageRank scores.
+# EXTRA CREDIT: biword (2-gram) index for phrase preference.
+BIWORD_INDEX_FILE = "biword_index.jsonl"
+BIWORD_OFFSETS_FILE = "biword_offsets.json"
 
 # Important-word boost: terms in <title>/<h1-3>/<b>/<strong> count this many
-# extra times. Lowered from 2 -> 1 because high boost on tiny slide pages
-# was making 10-word presentation slides outrank full content pages.
+# extra times. Lowered from 2 to 1 because a high boost let tiny slide pages
+# (about 10 words) outrank real content pages.
 IMPORTANT_BOOST = 1
-# Extra Credit: anchor_tf from links pointing TO this page (see indexer)
-# 加分项：别人链到本页的 <a> 文字，记入 anchor_tf
+# Extra credit: anchor_tf comes from the link text on pages that link to
+# this page (see indexer.py).
 ANCHOR_BOOST = 1
 
 # URL patterns that almost always indicate junk pages (image detail views,
@@ -45,17 +48,77 @@ JUNK_URL_PATTERNS = re.compile(
 # surface for rare queries where nothing better exists.
 JUNK_URL_PENALTY = 0.1
 
+# Extra credit: proximity bonus.
+# For a multi-term query, find the smallest window that holds every query
+# term. The bonus is 1 + PROXIMITY_ALPHA / (w - numTerms + 1), so terms sitting
+# right next to each other (w == numTerms) get the full 1 + alpha, and looser
+# matches fade back toward 1.0. Kept small so it nudges the ranking without
+# overriding the other heuristics.
+PROXIMITY_ALPHA = 0.15
+
+# EXTRA CREDIT: biword (2-gram) phrase bonus ---------------------------------
+# When a multi-term query's adjacent terms appear as an actual phrase in a doc
+# (found via the separate biword index), nudge that doc up. The bonus scales
+# with the fraction of the query's adjacent biwords the doc contains, so a full
+# phrase match gets 1 + PHRASE_BONUS. Like proximity, it is an ADDITIONAL
+# multiplicative factor and never weakens the M3 heuristics.
+PHRASE_BONUS = 0.20
+
+
+def smallest_window(pos_lists):
+    """
+    Extra credit: proximity.
+
+    Takes one sorted position list per query term and returns the size of the
+    smallest window that still contains every term, measured as (hi - lo + 1)
+    in token positions. This is the usual "smallest range covering elements
+    from k lists" sweep: merge all positions tagged by term, then slide a
+    window and shrink it while every term is still covered.
+
+    The caller guarantees each list is non-empty. Returns the window size (at
+    least the number of terms), or None if fewer than 2 lists are given.
+    """
+    k = len(pos_lists)
+    if k < 2:
+        return None
+
+    merged = []
+    for term_idx, lst in enumerate(pos_lists):
+        for p in lst:
+            merged.append((p, term_idx))
+    merged.sort()
+
+    counts = [0] * k
+    have = 0
+    left = 0
+    best = None
+    for right in range(len(merged)):
+        _, tr = merged[right]
+        if counts[tr] == 0:
+            have += 1
+        counts[tr] += 1
+        while have == k:
+            window = merged[right][0] - merged[left][0] + 1
+            if best is None or window < best:
+                best = window
+            _, tl = merged[left]
+            counts[tl] -= 1
+            if counts[tl] == 0:
+                have -= 1
+            left += 1
+    return best
+
 
 def url_quality_prior(url):
     """
     A small multiplicative prior favoring canonical pages: root URLs and
     shallow paths get a mild bump, deep paths a mild dampening. Junk
-    query strings are handled separately by JUNK_URL_PATTERNS — this
+    query strings are handled separately by JUNK_URL_PATTERNS. This
     function intentionally does NOT punish all query strings, because
     legitimate pages like view_faculty.php?ucinetid=lopes are canonical.
 
-    The prior is kept mild (~0.85 to ~1.08) so it only breaks ties and
-    nudges results — it must not override a genuinely stronger tf-idf
+    The prior is kept mild (about 0.85 to 1.08) so it only breaks ties and
+    nudges results. It must not override a genuinely stronger tf-idf
     score.
     """
     if not url:
@@ -84,7 +147,7 @@ def load_json(file_path):
 class IndexReader:
     """
     Reads postings from the JSONL inverted index on disk using a small
-    in-memory term -> byte-offset map. Never loads the full index.
+    in-memory map from term to byte offset. Never loads the whole index.
     """
 
     def __init__(self, index_file, offsets_file):
@@ -105,11 +168,14 @@ class IndexReader:
 
 
 def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
-                     pagerank=None):
+                     pagerank=None, biword_reader=None):
     """
-    lnc.ltc tf-idf scoring with cosine similarity. AND semantics.
-    Document side: lnc (log tf, no idf, cosine normalized via pre-computed doc_lengths)
-    Query side:    ltc (log tf, idf, cosine normalized)
+    lnc.ltc tf-idf scoring with cosine similarity, AND semantics.
+    Document side uses lnc: log tf, no idf, normalized by the precomputed
+    doc_lengths. Query side uses ltc: log tf, idf, cosine normalized.
+
+    EXTRA CREDIT: pass biword_reader (an IndexReader over biword_index.jsonl)
+    to enable the 2-gram phrase bonus for multi-term queries.
     """
     query_tokens = tokenize(query)
     if not query_tokens:
@@ -124,7 +190,7 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
     for token in query_tf:
         entry = reader.get_entry(token)
         if entry is None or not entry.get("postings"):
-            return []  # AND query: any missing term -> no results
+            return []  # AND query: if any term is missing, there are no results
         term_postings[token] = entry["postings"]
 
     # Build query weight vector: w_t,q = (1 + log10(tf_t,q)) * log10(N / df_t)
@@ -179,6 +245,56 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
     # Lowercase query tokens (already stemmed) for URL substring matching.
     query_term_set = set(query_tokens)
 
+    # Extra credit: proximity.
+    # For multi-term queries, reward docs where the terms show up close
+    # together. Collect each term's positions in the candidate doc, find the
+    # smallest window that covers every term, and give a tighter window a
+    # bigger bonus. This is an extra multiplier applied below, so it can only
+    # raise a score. Single-term queries skip it.
+    proximity_bonus = {}
+    unique_terms = list(query_tf.keys())
+    if len(unique_terms) >= 2:
+        pos_by_doc = defaultdict(dict)  # doc_id -> {term: [positions]}
+        for token in unique_terms:
+            for posting in term_postings[token]:
+                d = posting['doc_id']
+                if d in common_docs:
+                    p = posting.get('pos')
+                    if p:
+                        pos_by_doc[d][token] = p
+        num_terms = len(unique_terms)
+        for d, term_pos in pos_by_doc.items():
+            # Only score proximity when every query term has positions here.
+            if len(term_pos) == num_terms:
+                w = smallest_window(list(term_pos.values()))
+                if w is not None:
+                    proximity_bonus[d] = 1.0 + PROXIMITY_ALPHA / (w - num_terms + 1)
+
+    # EXTRA CREDIT: biword phrase bonus.
+    # Implements the course "run as a phrase query first" preference: form the
+    # query's adjacent biwords ("machin learn", "learn data"), look them up in
+    # the separate biword index, and reward candidate docs that actually
+    # contain those phrases. The cosine path above remains the fallback. This
+    # is an additional multiplicative factor (>= 1.0), never a replacement.
+    phrase_bonus = {}
+    if biword_reader is not None and len(query_tokens) >= 2:
+        query_biwords = {
+            query_tokens[i] + " " + query_tokens[i + 1]
+            for i in range(len(query_tokens) - 1)
+        }
+        if query_biwords:
+            biword_hits = defaultdict(int)  # doc_id -> # of query biwords matched
+            for bw in query_biwords:
+                entry = biword_reader.get_entry(bw)
+                if entry and entry.get("postings"):
+                    for p in entry["postings"]:
+                        d = p["doc_id"]
+                        if d in common_docs:
+                            biword_hits[d] += 1
+            n_biwords = len(query_biwords)
+            for d, matched in biword_hits.items():
+                phrase_bonus[d] = 1.0 + PHRASE_BONUS * (matched / n_biwords)
+
     results = []
     for doc_id, score in scores.items():
         url = bookkeeping.get(doc_id, "URL_NOT_FOUND")
@@ -198,11 +314,21 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
         if url_matches:
             score *= 1.0 + URL_TERM_MATCH_BONUS * min(url_matches, 2)
 
-        # Extra Credit: PageRank multiplies tf-idf score (if pagerank.json exists)
-        # 加分项：有 pagerank.json 时，按链接重要性调整分数
+        # Extra credit: if pagerank.json exists, multiply the tf-idf score
+        # by the PageRank score (how important the links say the page is).
         if pagerank:
             pr = pagerank.get(doc_id, 1.0 / N)
-            score *= pr * N  # scale so average page ~1x / 平均页约 1 倍
+            score *= pr * N  # scale so an average page is about 1x
+
+        # Extra credit: proximity. An extra factor (>= 1.0) on top of the
+        # other heuristics, so it can only help a score, never hurt it.
+        if proximity_bonus:
+            score *= proximity_bonus.get(doc_id, 1.0)
+
+        # EXTRA CREDIT: biword phrase bonus -- another factor (>= 1.0) layered
+        # on top of the M3 heuristics; never weakens them.
+        if phrase_bonus:
+            score *= phrase_bonus.get(doc_id, 1.0)
 
         results.append({
             "doc_id": doc_id,
@@ -270,7 +396,7 @@ def interactive_search(reader, bookkeeping, doc_lengths, N, pagerank=None):
 
 
 def load_pagerank_optional(path=PAGERANK_FILE):
-    """Load PR if present; None = search without PageRank / 无文件则不用 PR"""
+    """Load PageRank if the file exists. Return None when it does not, so search runs without PageRank."""
     import os
     if not os.path.isfile(path):
         return None
