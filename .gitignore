@@ -1,5 +1,6 @@
 # Corpus / data
 DEV/
+DEV
 
 # Build artifacts (too large for git)
 inverted_index.json
@@ -10,6 +11,11 @@ pagerank.json
 index_offsets.json
 partial_indexes/
 indexer_run.log
+biword_index.jsonl
+biword_offsets.json
+
+# Virtual environment
+.venv/
 
 # Evaluation outputs
 benchmark_results.json

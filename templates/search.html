@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ICS Search</title>
+  <style>
+    body { font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+           max-width: 720px; margin: 8vh auto; padding: 0 16px; color: #222; }
+    h1 { font-weight: 600; }
+    form { display: flex; gap: 8px; margin-top: 24px; }
+    input[type=text] { flex: 1; padding: 10px 12px; font-size: 16px;
+                       border: 1px solid #bbb; border-radius: 6px; }
+    button { padding: 10px 18px; font-size: 16px; border: 0;
+             border-radius: 6px; background: #2152a3; color: #fff;
+             cursor: pointer; }
+    button:hover { background: #18407e; }
+    .hint { color: #888; margin-top: 14px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>ICS Search Engine</h1>
+  <form action="/search" method="get">
+    <input type="text" name="q" placeholder="Search the ICS corpus…" autofocus>
+    <button type="submit">Search</button>
+  </form>
+  <p class="hint">tf-idf cosine ranking over the disk-based inverted index.</p>
+</body>
+</html>
