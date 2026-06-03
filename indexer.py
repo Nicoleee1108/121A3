@@ -8,7 +8,13 @@ from bs4 import BeautifulSoup
 from collections import defaultdict
 from nltk.stem import PorterStemmer
 
-from pagerank import extract_outlink_urls, compute_and_save
+from pagerank import (
+    extract_outlink_urls,
+    extract_anchor_links,
+    compute_and_save,
+    _resolve_url,
+    normalize_url,
+)
 
 #Porter Stemming initializing the instance
 stemmer = PorterStemmer()
@@ -136,6 +142,7 @@ def process_document(file_path):
         'content_hash': content_hash,
         'simhash': simhash_val,
         'outlink_urls': extract_outlink_urls(url, html_content),
+        'anchor_links': extract_anchor_links(url, html_content),
     }
 
 
@@ -156,6 +163,7 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
     simhashes = {}            # doc_id -> 64-bit SimHash (for near-dup phase)
     doc_urls = {}
     outlink_urls_by_doc = {}
+    anchor_links_by_doc = {}
     seen_urls = set()
     seen_content_hashes = set()
     doc_count = 0
@@ -189,6 +197,7 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
             doc_lengths[doc_id] = result['doc_length']
             doc_urls[doc_id] = url
             outlink_urls_by_doc[doc_id] = result['outlink_urls']
+            anchor_links_by_doc[doc_id] = result['anchor_links']
 
             tf_dict = result['tf']
             imp_tf_dict = result['imp_tf']
@@ -223,7 +232,86 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
     print(f"  URL duplicates skipped:     {url_dup_count}")
     print(f"  Exact content dups skipped: {content_dup_count}")
 
-    return partial_paths, doc_count, doc_lengths, simhashes, doc_urls, outlink_urls_by_doc
+    return (partial_paths, doc_count, doc_lengths, simhashes, doc_urls,
+            outlink_urls_by_doc, anchor_links_by_doc)
+
+
+def build_anchor_tf(doc_urls, anchor_links_by_doc, kept_doc_ids):
+    """
+    Aggregate anchor text tokens onto target documents.
+    Returns {doc_id: {token: anchor_tf_count}}.
+    """
+    kept = set(kept_doc_ids)
+    url_to_doc = {}
+    for doc_id in kept:
+        url = normalize_url(doc_urls.get(doc_id, ""))
+        if not url:
+            continue
+        url_to_doc[url] = doc_id
+        if url.endswith("/"):
+            url_to_doc[url.rstrip("/")] = doc_id
+        else:
+            url_to_doc[url + "/"] = doc_id
+
+    anchor_tf = defaultdict(lambda: defaultdict(int))
+    link_count = 0
+    for src, links in anchor_links_by_doc.items():
+        if src not in kept:
+            continue
+        for target_url, text in links:
+            tgt = _resolve_url(target_url, url_to_doc)
+            if not tgt or tgt not in kept or tgt == src:
+                continue
+            link_count += 1
+            for token in tokenize(text):
+                if token:
+                    anchor_tf[tgt][token] += 1
+
+    return {d: dict(terms) for d, terms in anchor_tf.items()}, link_count
+
+
+def dump_anchor_partial(anchor_tf_by_doc, partial_dir, exclude_doc_ids=None):
+    """Write anchor-only postings as an extra partial index for k-way merge."""
+    exclude = exclude_doc_ids or set()
+    index = defaultdict(list)
+    for doc_id, terms in anchor_tf_by_doc.items():
+        if doc_id in exclude:
+            continue
+        for token, freq in terms.items():
+            if freq > 0:
+                index[token].append({
+                    "doc_id": doc_id,
+                    "tf": 0,
+                    "imp_tf": 0,
+                    "anchor_tf": freq,
+                })
+
+    os.makedirs(partial_dir, exist_ok=True)
+    path = os.path.join(partial_dir, "anchor_partial.jsonl")
+    with open(path, "w", encoding="utf-8") as f:
+        for term in sorted(index.keys()):
+            f.write(json.dumps({"term": term, "postings": index[term]}) + "\n")
+    return path, len(index)
+
+
+def _merge_postings_for_term(postings):
+    """Combine duplicate (term, doc_id) rows from body + anchor partials."""
+    by_doc = {}
+    for p in postings:
+        doc_id = p["doc_id"]
+        if doc_id not in by_doc:
+            by_doc[doc_id] = {
+                "doc_id": doc_id,
+                "tf": p.get("tf", 0),
+                "imp_tf": p.get("imp_tf", 0),
+                "anchor_tf": p.get("anchor_tf", 0),
+            }
+        else:
+            cur = by_doc[doc_id]
+            cur["tf"] += p.get("tf", 0)
+            cur["imp_tf"] = max(cur["imp_tf"], p.get("imp_tf", 0))
+            cur["anchor_tf"] = max(cur["anchor_tf"], p.get("anchor_tf", 0))
+    return list(by_doc.values())
 
 
 def find_simhash_near_duplicates(simhashes, threshold=SIMHASH_THRESHOLD,
@@ -323,6 +411,8 @@ def merge_partials(partial_paths, output_file, offsets_file, exclude_doc_ids=Non
                 dropped_terms += 1
                 continue
 
+            merged_postings = _merge_postings_for_term(merged_postings)
+
             offsets[term] = out.tell()
             line_bytes = (json.dumps({
                 "term": term,
@@ -373,8 +463,9 @@ def main():
     print("=" * 60)
     print("Phase 1: Building partial indexes (offload to disk every 10k docs)")
     print("=" * 60)
-    partial_paths, doc_count, doc_lengths, simhashes, doc_urls, outlink_urls_by_doc = (
-        build_partial_indexes(root_dir, partial_dir))
+    (partial_paths, doc_count, doc_lengths, simhashes, doc_urls,
+     outlink_urls_by_doc, anchor_links_by_doc) = build_partial_indexes(
+        root_dir, partial_dir)
     print(f"\nBuilt {len(partial_paths)} partial indexes from "
           f"{doc_count} unique documents (after URL+exact-content dedup).")
 
@@ -398,6 +489,18 @@ def main():
     filtered_outlinks = {
         d: outlink_urls_by_doc[d] for d in kept_doc_ids if d in outlink_urls_by_doc
     }
+
+    print("\n" + "=" * 60)
+    print("Phase 1.55: Anchor text indexing (words in <a> -> target page)")
+    print("=" * 60)
+    anchor_tf_by_doc, anchor_link_count = build_anchor_tf(
+        doc_urls, anchor_links_by_doc, kept_doc_ids)
+    anchor_partial_path, anchor_terms = dump_anchor_partial(
+        anchor_tf_by_doc, partial_dir, exclude_doc_ids=near_dup_doc_ids)
+    partial_paths.append(anchor_partial_path)
+    print(f"  In-corpus anchor links used: {anchor_link_count}")
+    print(f"  Target docs with anchor tokens: {len(anchor_tf_by_doc)}")
+    print(f"  Anchor partial terms: {anchor_terms} -> {anchor_partial_path}")
 
     print("\n" + "=" * 60)
     print("Phase 1.6: PageRank (link graph from <a href>, d=0.85)")

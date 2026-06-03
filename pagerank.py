@@ -62,6 +62,38 @@ def extract_outlink_urls(page_url, html_content):
     return out
 
 
+def extract_anchor_links(page_url, html_content):
+    """
+    Return (target_url, anchor_text) for each in-corpus <a href>.
+    Anchor text is indexed on the target page, not the linking page.
+    """
+    if not page_url or not html_content:
+        return []
+
+    soup = BeautifulSoup(html_content, "html.parser")
+    base = normalize_url(page_url)
+    links = []
+
+    for tag in soup.find_all("a", href=True):
+        href = tag["href"].strip()
+        if not href or href.startswith(("#", "mailto:", "javascript:", "tel:")):
+            continue
+        try:
+            absolute = normalize_url(urljoin(base, href))
+            parsed = urlparse(absolute)
+        except ValueError:
+            continue
+        if parsed.scheme not in ("http", "https"):
+            continue
+        if not _is_ics_host(parsed.netloc):
+            continue
+        text = tag.get_text(separator=" ", strip=True)
+        if not text:
+            continue
+        links.append((absolute, text))
+    return links
+
+
 def _resolve_url(url, url_to_doc):
     """Map a URL to doc_id; try with/without trailing slash."""
     if url in url_to_doc:

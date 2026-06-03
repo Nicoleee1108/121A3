@@ -17,6 +17,8 @@ PAGERANK_FILE = "pagerank.json"
 # extra times. Lowered from 2 -> 1 because high boost on tiny slide pages
 # was making 10-word presentation slides outrank full content pages.
 IMPORTANT_BOOST = 1
+# Anchor text extra credit: tokens in <a href> pointing to this page (see indexer).
+ANCHOR_BOOST = 1
 
 # URL patterns that almost always indicate junk pages (image detail views,
 # WordPress XML-RPC endpoints, Apache directory sort links, login/edit pages,
@@ -153,8 +155,12 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
             doc_id = posting['doc_id']
             if doc_id not in common_docs:
                 continue
-            # Boost: tokens appearing in title/h1-3/bold count IMPORTANT_BOOST extra times
-            effective_tf = posting['tf'] + IMPORTANT_BOOST * posting.get('imp_tf', 0)
+            # Boost: title/h1-3/bold (imp_tf) + anchor text on links to this page (anchor_tf)
+            effective_tf = (
+                posting['tf']
+                + IMPORTANT_BOOST * posting.get('imp_tf', 0)
+                + ANCHOR_BOOST * posting.get('anchor_tf', 0)
+            )
             d_weight = (1 + math.log10(effective_tf)) if effective_tf > 0 else 0
             d_length = doc_lengths.get(doc_id, 1)
             if d_length > 0:
