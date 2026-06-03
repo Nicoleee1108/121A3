@@ -6,6 +6,7 @@ inverted_index.json
 inverted_index.jsonl
 bookkeeping.json
 doc_lengths.json
+pagerank.json
 index_offsets.json
 partial_indexes/
 indexer_run.log

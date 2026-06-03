@@ -30,7 +30,9 @@ from search import (
     DOC_LENGTHS_FILE,
     BOOKKEEPING_FILE,
     INDEX_REPORT_FILE,
+    PAGERANK_FILE,
 )
+from search import load_pagerank_optional
 
 
 QUERIES = [
@@ -85,12 +87,16 @@ def main():
     bookkeeping = load_json(BOOKKEEPING_FILE)
     doc_lengths = load_json(DOC_LENGTHS_FILE)
     N = load_json(INDEX_REPORT_FILE)["document_count"]
-    print(f"Ready: {len(reader.offsets)} terms, {N} documents.\n")
+    pagerank = load_pagerank_optional(PAGERANK_FILE)
+    pr_note = "on" if pagerank else "off"
+    print(f"Ready: {len(reader.offsets)} terms, {N} documents, PageRank {pr_note}.\n")
 
     out = []
     for qid, query in QUERIES:
         t0 = time.perf_counter()
-        results = search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5)
+        results = search_and_query(
+            query, reader, bookkeeping, doc_lengths, N, top_urls=5,
+            pagerank=pagerank)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         print("=" * 90)

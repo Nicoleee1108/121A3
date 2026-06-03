@@ -11,6 +11,7 @@ OFFSETS_FILE = "index_offsets.json"
 DOC_LENGTHS_FILE = "doc_lengths.json"
 BOOKKEEPING_FILE = "bookkeeping.json"
 INDEX_REPORT_FILE = "index_report.json"
+PAGERANK_FILE = "pagerank.json"
 
 # Important-word boost: terms in <title>/<h1-3>/<b>/<strong> count this many
 # extra times. Lowered from 2 -> 1 because high boost on tiny slide pages
@@ -100,7 +101,8 @@ class IndexReader:
         self.fh.close()
 
 
-def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5):
+def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
+                     pagerank=None):
     """
     lnc.ltc tf-idf scoring with cosine similarity. AND semantics.
     Document side: lnc (log tf, no idf, cosine normalized via pre-computed doc_lengths)
@@ -189,6 +191,10 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5):
         if url_matches:
             score *= 1.0 + URL_TERM_MATCH_BONUS * min(url_matches, 2)
 
+        if pagerank:
+            pr = pagerank.get(doc_id, 1.0 / N)
+            score *= pr * N
+
         results.append({
             "doc_id": doc_id,
             "url": url,
@@ -199,7 +205,7 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5):
     return results[:top_urls]
 
 
-def run_test_query(reader, bookkeeping, doc_lengths, N):
+def run_test_query(reader, bookkeeping, doc_lengths, N, pagerank=None):
     test_queries = [
         "cristina lopes",
         "machine learning",
@@ -212,7 +218,8 @@ def run_test_query(reader, bookkeeping, doc_lengths, N):
         print("=" * 80)
         print(f"Query: {query}")
         print("-" * 80)
-        results = search_and_query(query, reader, bookkeeping, doc_lengths, N)
+        results = search_and_query(
+            query, reader, bookkeeping, doc_lengths, N, pagerank=pagerank)
         test_results[query] = results
         if not results:
             print("No results found.")
@@ -230,7 +237,7 @@ def save_results(results, output_file):
         json.dump(results, f, indent=4)
 
 
-def interactive_search(reader, bookkeeping, doc_lengths, N):
+def interactive_search(reader, bookkeeping, doc_lengths, N, pagerank=None):
     print("\n" + "=" * 80)
     print("Welcome to the search engine!")
     print("Supports AND queries with tf-idf cosine ranking.")
@@ -243,7 +250,8 @@ def interactive_search(reader, bookkeeping, doc_lengths, N):
             break
         if not query:
             continue
-        results = search_and_query(query, reader, bookkeeping, doc_lengths, N)
+        results = search_and_query(
+            query, reader, bookkeeping, doc_lengths, N, pagerank=pagerank)
         if not results:
             print("No results found.")
         else:
@@ -252,17 +260,27 @@ def interactive_search(reader, bookkeeping, doc_lengths, N):
                 print(f"  {i}. {result['url']}  (score: {result['score']})")
 
 
+def load_pagerank_optional(path=PAGERANK_FILE):
+    import os
+    if not os.path.isfile(path):
+        return None
+    return load_json(path)
+
+
 def main():
     print("Loading offset map and doc lengths (index stays on disk)...")
     reader = IndexReader(INDEX_FILE, OFFSETS_FILE)
     bookkeeping = load_json(BOOKKEEPING_FILE)
     doc_lengths = load_json(DOC_LENGTHS_FILE)
     N = load_json(INDEX_REPORT_FILE)["document_count"]
-    print(f"Ready! ({len(reader.offsets)} terms, {N} documents)\n")
+    pagerank = load_pagerank_optional()
+    pr_note = "on" if pagerank else "off (run build_pagerank.py)"
+    print(f"Ready! ({len(reader.offsets)} terms, {N} documents, PageRank {pr_note})\n")
 
-    test_results = run_test_query(reader, bookkeeping, doc_lengths, N)
+    test_results = run_test_query(
+        reader, bookkeeping, doc_lengths, N, pagerank=pagerank)
     save_results(test_results, "test_query_results.json")
-    interactive_search(reader, bookkeeping, doc_lengths, N)
+    interactive_search(reader, bookkeeping, doc_lengths, N, pagerank=pagerank)
     reader.close()
 
 

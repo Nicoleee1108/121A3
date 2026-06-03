@@ -8,6 +8,8 @@ from bs4 import BeautifulSoup
 from collections import defaultdict
 from nltk.stem import PorterStemmer
 
+from pagerank import extract_outlink_urls, compute_and_save
+
 #Porter Stemming initializing the instance
 stemmer = PorterStemmer()
 
@@ -133,6 +135,7 @@ def process_document(file_path):
         'url': url,
         'content_hash': content_hash,
         'simhash': simhash_val,
+        'outlink_urls': extract_outlink_urls(url, html_content),
     }
 
 
@@ -151,6 +154,8 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
     in_memory = defaultdict(list)
     doc_lengths = {}
     simhashes = {}            # doc_id -> 64-bit SimHash (for near-dup phase)
+    doc_urls = {}
+    outlink_urls_by_doc = {}
     seen_urls = set()
     seen_content_hashes = set()
     doc_count = 0
@@ -182,6 +187,8 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
             seen_content_hashes.add(result['content_hash'])
             simhashes[doc_id] = result['simhash']
             doc_lengths[doc_id] = result['doc_length']
+            doc_urls[doc_id] = url
+            outlink_urls_by_doc[doc_id] = result['outlink_urls']
 
             tf_dict = result['tf']
             imp_tf_dict = result['imp_tf']
@@ -216,7 +223,7 @@ def build_partial_indexes(root_dir, partial_dir, docs_per_partial=10000):
     print(f"  URL duplicates skipped:     {url_dup_count}")
     print(f"  Exact content dups skipped: {content_dup_count}")
 
-    return partial_paths, doc_count, doc_lengths, simhashes
+    return partial_paths, doc_count, doc_lengths, simhashes, doc_urls, outlink_urls_by_doc
 
 
 def find_simhash_near_duplicates(simhashes, threshold=SIMHASH_THRESHOLD,
@@ -358,6 +365,7 @@ def main():
     output_file = "inverted_index.jsonl"
     offsets_file = "index_offsets.json"
     doc_lengths_file = "doc_lengths.json"
+    pagerank_file = "pagerank.json"
 
     if os.path.exists(partial_dir):
         shutil.rmtree(partial_dir)
@@ -365,8 +373,8 @@ def main():
     print("=" * 60)
     print("Phase 1: Building partial indexes (offload to disk every 10k docs)")
     print("=" * 60)
-    partial_paths, doc_count, doc_lengths, simhashes = build_partial_indexes(
-        root_dir, partial_dir)
+    partial_paths, doc_count, doc_lengths, simhashes, doc_urls, outlink_urls_by_doc = (
+        build_partial_indexes(root_dir, partial_dir))
     print(f"\nBuilt {len(partial_paths)} partial indexes from "
           f"{doc_count} unique documents (after URL+exact-content dedup).")
 
@@ -384,6 +392,25 @@ def main():
         json.dump(filtered_doc_lengths, f)
     print(f"Saved doc lengths for {len(filtered_doc_lengths)} documents "
           f"-> {doc_lengths_file}")
+
+    kept_doc_ids = list(filtered_doc_lengths.keys())
+    filtered_doc_urls = {d: doc_urls[d] for d in kept_doc_ids if d in doc_urls}
+    filtered_outlinks = {
+        d: outlink_urls_by_doc[d] for d in kept_doc_ids if d in outlink_urls_by_doc
+    }
+
+    print("\n" + "=" * 60)
+    print("Phase 1.6: PageRank (link graph from <a href>, d=0.85)")
+    print("=" * 60)
+    pr_stats = compute_and_save(
+        kept_doc_ids, filtered_doc_urls, filtered_outlinks, pagerank_file)
+    print(f"  Documents in graph: {pr_stats['documents']}")
+    print(f"  In-corpus edges:      {pr_stats['edges']}")
+    print(f"  Saved -> {pagerank_file}")
+    if pr_stats["top5"]:
+        print("  Top PageRank pages:")
+        for doc_id, score in pr_stats["top5"]:
+            print(f"    {score:.6f}  {filtered_doc_urls.get(doc_id, doc_id)}")
 
     print("\n" + "=" * 60)
     print("Phase 2: K-way merging partial indexes (writing JSONL + offset map)")
@@ -405,6 +432,7 @@ def main():
     print(f"Final index:       {output_file} ({index_size_kb:.2f} KB)")
     print(f"Offset map:        {offsets_file} ({len(offsets)} entries)")
     print(f"Doc lengths:       {doc_lengths_file}")
+    print(f"PageRank scores:   {pagerank_file}")
 
 
 if __name__ == "__main__":
