@@ -31,8 +31,11 @@ from search import (
     BOOKKEEPING_FILE,
     INDEX_REPORT_FILE,
     PAGERANK_FILE,
+    BIWORD_INDEX_FILE,      # EXTRA CREDIT: biword index
+    BIWORD_OFFSETS_FILE,    # EXTRA CREDIT: biword index
 )
 from search import load_pagerank_optional
+import os  # EXTRA CREDIT: detect optional biword index files
 
 
 QUERIES = [
@@ -89,14 +92,22 @@ def main():
     N = load_json(INDEX_REPORT_FILE)["document_count"]
     pagerank = load_pagerank_optional(PAGERANK_FILE)
     pr_note = "on" if pagerank else "off"
-    print(f"Ready: {len(reader.offsets)} terms, {N} documents, PageRank {pr_note}.\n")
+
+    # EXTRA CREDIT: biword -- open the 2-gram index if it exists (disk-based,
+    # seek-only via IndexReader). None -> phrase bonus simply isn't applied.
+    biword_reader = None
+    if os.path.isfile(BIWORD_INDEX_FILE) and os.path.isfile(BIWORD_OFFSETS_FILE):
+        biword_reader = IndexReader(BIWORD_INDEX_FILE, BIWORD_OFFSETS_FILE)
+    bw_note = f"on ({len(biword_reader.offsets)} biwords)" if biword_reader else "off"
+    print(f"Ready: {len(reader.offsets)} terms, {N} documents, "
+          f"PageRank {pr_note}, biword {bw_note}.\n")
 
     out = []
     for qid, query in QUERIES:
         t0 = time.perf_counter()
         results = search_and_query(
             query, reader, bookkeeping, doc_lengths, N, top_urls=5,
-            pagerank=pagerank)
+            pagerank=pagerank, biword_reader=biword_reader)
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         print("=" * 90)
@@ -117,6 +128,8 @@ def main():
         })
 
     reader.close()
+    if biword_reader is not None:
+        biword_reader.close()  # EXTRA CREDIT: biword
 
     with open("benchmark_results.json", "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2)
