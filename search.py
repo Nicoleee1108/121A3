@@ -12,6 +12,11 @@ DOC_LENGTHS_FILE = "doc_lengths.json"
 BOOKKEEPING_FILE = "bookkeeping.json"
 INDEX_REPORT_FILE = "index_report.json"
 PAGERANK_FILE = "pagerank.json"  # Extra credit: offline PageRank scores.
+# Damping exponent for the PageRank factor. score *= (pr*N) ** PAGERANK_GAMMA
+# keeps an average page at ~1x (1**g == 1) but compresses high-inlink hub
+# pages (contact/about/policy/home) so PageRank acts as a mild tie-breaker
+# instead of overpowering tf-idf relevance. gamma<1 bounds its influence.
+PAGERANK_GAMMA = 0.2
 # EXTRA CREDIT: biword (2-gram) index for phrase preference.
 BIWORD_INDEX_FILE = "biword_index.jsonl"
 BIWORD_OFFSETS_FILE = "biword_offsets.json"
@@ -318,7 +323,9 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
         # by the PageRank score (how important the links say the page is).
         if pagerank:
             pr = pagerank.get(doc_id, 1.0 / N)
-            score *= pr * N  # scale so an average page is about 1x
+            # Damped so PageRank nudges rather than dominates: average page
+            # (pr*N==1) -> 1x; a 50x-PR hub -> only ~50**0.2 ~= 2.2x.
+            score *= (pr * N) ** PAGERANK_GAMMA
 
         # Extra credit: proximity. An extra factor (>= 1.0) on top of the
         # other heuristics, so it can only help a score, never hurt it.
