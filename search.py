@@ -60,6 +60,11 @@ JUNK_URL_PENALTY = 0.1
 # matches fade back toward 1.0. Kept small so it nudges the ranking without
 # overriding the other heuristics.
 PROXIMITY_ALPHA = 0.15
+# Efficiency guard: skip proximity when the AND-result set is this large. For
+# degenerate all-common-word queries (e.g. "of the and a") the intersection is
+# huge and merging position lists would blow past the 300ms budget -- and
+# proximity adds no useful signal there. Normal queries match far fewer docs.
+PROXIMITY_MAX_DOCS = 2000
 
 # EXTRA CREDIT: biword (2-gram) phrase bonus ---------------------------------
 # When a multi-term query's adjacent terms appear as an actual phrase in a doc
@@ -143,6 +148,49 @@ def url_quality_prior(url):
         prior *= 1.08
 
     return prior
+
+
+# Host-name (canonical-site) match: institutional labels we ignore when
+# checking whether a query term names the site (e.g. mondego.ICS.UCI.EDU).
+HOST_LABEL_STOPWORDS = {'www', 'uci', 'edu', 'ics', 'com', 'org', 'net'}
+# A query term that names the site's host is a strong "this is the official
+# page about X" signal (informatics -> informatics.uci.edu). tf-idf's length
+# normalization otherwise buries these long canonical homepages under short
+# pages that merely mention the term. Kept as a bounded multiplicative bump.
+HOST_TERM_MATCH_BONUS = 0.6   # query term appears in the host name
+HOST_ROOT_HOME_BONUS = 0.5    # ...and the page is that host's root/home
+
+
+def host_match_factor(url, query_term_set):
+    """
+    Return a multiplicative bonus (>= 1.0) when a query term names the site's
+    host, e.g. 'informatics' -> informatics.uci.edu, 'mondego' -> mondego...,
+    'vision' -> vision.ics.uci.edu. Matches on host-label prefix so it works
+    with Porter stems ('informat' matches 'informatics'). The bonus is larger
+    when the matched host's own root/home page is the candidate, since that is
+    almost certainly the canonical page for the term. General across sites,
+    not tied to any specific query.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return 1.0
+    host = (parsed.hostname or '').lower()
+    if not host:
+        return 1.0
+    labels = [lab for lab in host.split('.')
+              if lab and lab not in HOST_LABEL_STOPWORDS]
+    matched = any(lab.startswith(t) for t in query_term_set if len(t) >= 3
+                  for lab in labels)
+    if not matched:
+        return 1.0
+
+    factor = 1.0 + HOST_TERM_MATCH_BONUS
+    path = parsed.path or '/'
+    if path in ('', '/') or path.rstrip('/').endswith(('/index.html', '/index.htm', '/index.php')):
+        factor *= 1.0 + HOST_ROOT_HOME_BONUS
+    return factor
+
 
 def load_json(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -258,7 +306,7 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
     # raise a score. Single-term queries skip it.
     proximity_bonus = {}
     unique_terms = list(query_tf.keys())
-    if len(unique_terms) >= 2:
+    if len(unique_terms) >= 2 and len(common_docs) <= PROXIMITY_MAX_DOCS:
         pos_by_doc = defaultdict(dict)  # doc_id -> {term: [positions]}
         for token in unique_terms:
             for posting in term_postings[token]:
@@ -318,6 +366,11 @@ def search_and_query(query, reader, bookkeeping, doc_lengths, N, top_urls=5,
         url_matches = sum(1 for t in query_term_set if t and t in url_lower)
         if url_matches:
             score *= 1.0 + URL_TERM_MATCH_BONUS * min(url_matches, 2)
+
+        # Canonical-site bonus: a query term that names the host (and especially
+        # that host's home page) surfaces official pages that length
+        # normalization would otherwise bury, e.g. informatics.uci.edu/.
+        score *= host_match_factor(url, query_term_set)
 
         # Extra credit: if pagerank.json exists, multiply the tf-idf score
         # by the PageRank score (how important the links say the page is).

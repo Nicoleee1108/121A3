@@ -1,110 +1,110 @@
 {
     "cristina lopes": [
         {
-            "doc_id": "www_ics_uci_edu/29cf971008606c6a5961448e4bad8061d573cd4cf0a7d033b56a7de9b53666be.json",
-            "url": "https://www.ics.uci.edu/faculty/area/index.php",
-            "score": 0.219249
+            "doc_id": "mondego_ics_uci_edu/32234f92a79c006e6027f831568fc099f6ed384a07d4732596acb45fd966dd7d.json",
+            "url": "http://mondego.ics.uci.edu/",
+            "score": 0.200688
         },
         {
             "doc_id": "www_ics_uci_edu/6b51740ad7fc57079b0a993e219b70c0310890bb16be915a0eda43d9c79da305.json",
             "url": "https://www.ics.uci.edu/~lopes/",
-            "score": 0.210792
+            "score": 0.171354
         },
         {
-            "doc_id": "mondego_ics_uci_edu/32234f92a79c006e6027f831568fc099f6ed384a07d4732596acb45fd966dd7d.json",
-            "url": "http://mondego.ics.uci.edu/",
-            "score": 0.163008
+            "doc_id": "www_informatics_uci_edu/74710be34b0d37a42e40746228bba53360c45a5495c91db6234a05e769d6105b.json",
+            "url": "https://www.informatics.uci.edu/explore/faculty-profiles/cristina-lopes/",
+            "score": 0.142459
+        },
+        {
+            "doc_id": "www_ics_uci_edu/e97d7ce8d7e514b09ee50fc97be7036a75b8fcfd42ea13a81fd1fb3a4c9760fc.json",
+            "url": "https://www.ics.uci.edu/~lopes/datasets/SDS_source-repo-18k.html",
+            "score": 0.123977
         },
         {
             "doc_id": "www_ics_uci_edu/1df737626870a4bfb732b1181c1309321c500a04bafae755762ba7b1da22adc1.json",
             "url": "https://www.ics.uci.edu/faculty/profiles/view_faculty.php?ucinetid=lopes",
-            "score": 0.035195
-        },
-        {
-            "doc_id": "flamingo_ics_uci_edu/ae2a95d3d6d22c4be16834e4415790ac945fdd42f9dcaa603bd3d8fe68d89494.json",
-            "url": "http://flamingo.ics.uci.edu/spellchecker/",
-            "score": 0.028749
+            "score": 0.123693
         }
     ],
     "machine learning": [
         {
             "doc_id": "archive_ics_uci_edu/ca910b2e04102d4f228914e8580c2ea8955216e1a577d5bed3584bd5626066ed.json",
             "url": "http://archive.ics.uci.edu/ml/contact.html",
-            "score": 34.396384
+            "score": 0.960858
+        },
+        {
+            "doc_id": "cml_ics_uci_edu/bda892ee947b3271e4d6236c3c2295fd3c571d601f79089de8e9f714a3b7c7c7.json",
+            "url": "https://cml.ics.uci.edu/",
+            "score": 0.721317
+        },
+        {
+            "doc_id": "sli_ics_uci_edu/cffece53d5bdccf1bd671e36bb9dec2fb3295f909c83285f69c9fc3e2cfd9f22.json",
+            "url": "http://sli.ics.uci.edu/Classes/Classes",
+            "score": 0.664319
         },
         {
             "doc_id": "archive_ics_uci_edu/37920d848e060d1edca5c54193cf9824824b7dcb86bf0a817d89b75182561516.json",
             "url": "http://archive.ics.uci.edu/ml/citation_policy.html",
-            "score": 23.439795
+            "score": 0.654787
         },
         {
-            "doc_id": "archive_ics_uci_edu/bbc47aa3eead6bae12022126b5995c228f909ce1d0fc35e08cf2935d0bbb0a31.json",
-            "url": "http://archive.ics.uci.edu/ml/about.html",
-            "score": 22.926383
-        },
-        {
-            "doc_id": "archive_ics_uci_edu/90723f07d4d72c15b07118fff9a23a9fe8d723b23b5086bf4200f2ecb52a39ab.json",
-            "url": "http://archive.ics.uci.edu/ml/machine-learning-databases/",
-            "score": 22.688039
-        },
-        {
-            "doc_id": "archive_ics_uci_edu/1256f8203754bfc82e37c9903f1f7ae558c3cc3be9ff04b8ec5b8eb71bfae105.json",
-            "url": "http://archive.ics.uci.edu/ml/donation_policy.html",
-            "score": 18.774531
+            "doc_id": "archive_ics_uci_edu/1028d08f649d1dfbebb2b1e584d76175df8facf5e245b610164b0fc7377b68e7.json",
+            "url": "http://archive.ics.uci.edu/ml/machine-learning-databases/statlog/",
+            "score": 0.651485
         }
     ],
     "ACM": [
         {
-            "doc_id": "ngs_ics_uci_edu/01715b2dfee80250a951d0ebf1ab4bdddc391996460fdcb4428b53f3d4ac7378.json",
+            "doc_id": "www_ics_uci_edu/ecd332e16ecaf3242ece84a18334ecdfcaa7e14c2df009ab21b82e3dee056bd6.json",
+            "url": "https://www.ics.uci.edu/~eppstein/pubs/year.html",
+            "score": 0.338058
+        },
+        {
+            "doc_id": "isg_ics_uci_edu/c3419339470a021800b4193e009d2f8c74df9f97285c9922f7c0fd3671a0c0e1.json",
+            "url": "https://isg.ics.uci.edu/news/prof-chen-li-became-an-acm-distinguished-member/",
+            "score": 0.322384
+        },
+        {
+            "doc_id": "ngs_ics_uci_edu/77731a8ecd1e4bbb2c5913edadeea34cce94b271427ca61e3254af0754bb5473.json",
             "url": "https://ngs.ics.uci.edu/professionalsocial/recognitions/",
-            "score": 7.038798
+            "score": 0.268161
         },
         {
-            "doc_id": "ngs_ics_uci_edu/4193b0f18a0d4c62cd299300d69a85cedbdf7a3acd76f3157d36a2b9a54cbbcb.json",
+            "doc_id": "ngs_ics_uci_edu/d28a40fedf36a72679db4dfa64039445ee934191f9ea2d4c454bebe7b4876af7.json",
             "url": "https://ngs.ics.uci.edu/professionalsocial/services/",
-            "score": 6.179483
+            "score": 0.235423
         },
         {
-            "doc_id": "ngs_ics_uci_edu/2027a857108e46f883f76c6e509d31ae83c3595778f5b9f4c27d0725954f09fa.json",
+            "doc_id": "ngs_ics_uci_edu/9704ae9d9368f50f888e0d115696fa1a6ebe11f1f8c1df90c55738cab56f5341.json",
             "url": "https://ngs.ics.uci.edu/",
-            "score": 6.025475
-        },
-        {
-            "doc_id": "ngs_ics_uci_edu/66f965fa6ab8e8f544564a5d36e1d692724cf22e225f8ffd43d447f632436d23.json",
-            "url": "https://ngs.ics.uci.edu/professionalsocial/interviews/",
-            "score": 5.733478
-        },
-        {
-            "doc_id": "ngs_ics_uci_edu/2affcd01989dbe4ff0116b4ed4888ff33dfd4e11f2b2219cd4eb767f7e1e8e7f.json",
-            "url": "https://ngs.ics.uci.edu/research/presentations/",
-            "score": 5.189608
+            "score": 0.227516
         }
     ],
     "master of software engineering": [
         {
-            "doc_id": "www_ics_uci_edu/13a989dd03df56c411c6181ccb6dafc57928cdf48bcae1edd664445152b26b8b.json",
-            "url": "https://www.ics.uci.edu/grad/degrees/index",
-            "score": 6.645222
+            "doc_id": "mswe_ics_uci_edu/aea1caee5eee2184127f8867c6e3bd4929be507998fe41504d6a5c173c472a66.json",
+            "url": "https://mswe.ics.uci.edu/",
+            "score": 0.456388
         },
         {
             "doc_id": "www_ics_uci_edu/244e8ef5798ba9b967327bbc2564eb9e67f064695709786afaac87050d3955c1.json",
             "url": "https://www.ics.uci.edu/grad/admissions/index",
-            "score": 5.526401
+            "score": 0.415912
         },
         {
-            "doc_id": "www_ics_uci_edu/1fe335737dbb74115f6d7405c5994b5e1e68befcda823c47aea0106c09d6cfc9.json",
-            "url": "https://www.ics.uci.edu/about/about_factsfigures.php",
-            "score": 4.484786
+            "doc_id": "mswe_ics_uci_edu/812072c281f4ed88fcc5489bc6f3cdf86617d815da1e948f81629f2671fbcdbf.json",
+            "url": "https://mswe.ics.uci.edu/admissions/information_sessions/",
+            "score": 0.348147
         },
         {
-            "doc_id": "www_ics_uci_edu/306f967a7514debe0e2c96152a86245ad3b3befe4113089407ad34e06971b025.json",
-            "url": "https://www.ics.uci.edu/grad/admissions/Prospective_ApplicationProcess.php",
-            "score": 3.627446
+            "doc_id": "mswe_ics_uci_edu/97ec17cf1e572a9f25e55b7dc0718b979dd5c9bfe6c3eb78ea20c88c0c68a4e1.json",
+            "url": "https://mswe.ics.uci.edu/career/",
+            "score": 0.3088
         },
         {
-            "doc_id": "mswe_ics_uci_edu/aea1caee5eee2184127f8867c6e3bd4929be507998fe41504d6a5c173c472a66.json",
-            "url": "https://mswe.ics.uci.edu/",
-            "score": 1.330965
+            "doc_id": "www_ics_uci_edu/6b51740ad7fc57079b0a993e219b70c0310890bb16be915a0eda43d9c79da305.json",
+            "url": "https://www.ics.uci.edu/~lopes/",
+            "score": 0.301376
         }
     ]
 }

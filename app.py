@@ -77,5 +77,9 @@ def search():
 
 
 if __name__ == "__main__":
+    import os
+    # Port 5000 is taken by macOS AirPlay Receiver / Control Center; default to
+    # 5001. Override with PORT=xxxx if needed.
+    port = int(os.environ.get("PORT", "5001"))
     # threaded=False keeps the single shared file handle in IndexReader safe.
-    app.run(host="127.0.0.1", port=5000, debug=False, threaded=False)
+    app.run(host="127.0.0.1", port=port, debug=False, threaded=False)
